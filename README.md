@@ -1,5 +1,6 @@
 # PROYECTO DE INGENIERIA DEL SOFTWARE
-##Gestion para talleres Automotrices
+
+## Gestion para talleres Automotrices
 
 ## Integrantes del Equipo
 * Rigoberto Jose Guillen 20161001007
