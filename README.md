@@ -8,5 +8,5 @@
 * [Companiero 3]
 
 1. Clona este repositorio en tu máquina:
-```bash
+
    git clone [https://github.com/RigobertoGuillen/TALLERES_AUTOMOTRICES.git](https://github.com/RigobertoGuillen/TALLERES_AUTOMOTRICES.git)
