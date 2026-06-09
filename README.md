@@ -4,7 +4,7 @@
 
 ## Integrantes del Equipo
 * Rigoberto Jose Guillen 20161001007
-* [Compañero 1]
+* Jose Adrian Peña 20201003550
 * [Compañero 2]
 * [Companiero 3]
 
