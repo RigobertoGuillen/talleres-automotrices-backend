@@ -5,7 +5,7 @@
 ## Integrantes del Equipo
 * Rigoberto Jose Guillen 20161001007
 * Jose Adrian Peña 20201003550
-* [Compañero 2]
+* Carlos Edgado Vallecillo 20162001308
 * [Companiero 3]
 
 1. Clona este repositorio en tu máquina:
