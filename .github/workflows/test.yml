@@ -41,10 +41,11 @@ jobs:
         
       - name: Run migrations
         env:
+          PGPASSWORD: postgres  # ← AGREGAR ESTO
           DB_HOST: localhost
           DB_PORT: 5432
           DB_USER: postgres
-          DB_PASSWORD: admin123
+          DB_PASSWORD: postgres
           DB_NAME: taller_mecanico
         run: |
           psql -h localhost -U postgres -d taller_mecanico -f database/migrations/01_init.sql
