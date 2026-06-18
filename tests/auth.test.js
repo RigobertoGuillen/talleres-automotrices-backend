@@ -1,20 +1,20 @@
 const request = require('supertest');
 const app = require('../src/app');
-const pool = require('../src/config/db');
+const db = require('../src/config/db'); // Usar db
 
 describe('Auth Endpoints', () => {
   beforeAll(async () => {
     try {
-      await pool.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
+      await db.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
       
-      await pool.query(`
+      await db.query(`
         INSERT INTO roles (id, nombre, descripcion) 
         OVERRIDING SYSTEM VALUE
         VALUES (1, 'administrador', 'Acceso total al sistema')
         ON CONFLICT (id) DO NOTHING;
       `);
 
-      await pool.query(`
+      await db.query(`
         INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id)
         VALUES (
           'Administrador Principal', 
@@ -76,4 +76,8 @@ describe('Auth Endpoints', () => {
     expect(response.status).toBe(400);
     expect(response.body.success).toBe(false);
   });
+
+  afterAll(async () => {
+  await db.end(); // Esto es fundamental para cerrar las conexiones
+});
 });

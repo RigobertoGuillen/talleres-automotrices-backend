@@ -1,9 +1,9 @@
-const pool = require('../config/db');
+const db = require('../config/db'); // Importamos el objeto db centralizado
 const bcrypt = require('bcryptjs');
 
 class Usuario {
   static async findByUsername(nombre_usuario) {
-    const result = await pool.query(
+    const result = await db.query( // Usamos db.query en lugar de pool.query
       `SELECT u.*, r.nombre AS rol
        FROM usuarios u
        JOIN roles r ON u.rol_id = r.id
@@ -12,8 +12,9 @@ class Usuario {
     );
     return result.rows[0] || null;
   }
+
   static async findAll() {
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT
           u.id,
           u.nombre_completo,
@@ -28,8 +29,9 @@ class Usuario {
     );
     return result.rows;
   }
+
   static async findById(id) {
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT
           u.id,
           u.nombre_completo,
@@ -45,6 +47,7 @@ class Usuario {
     );
     return result.rows[0] || null;
   }
+
   static async create(data) {
     const {
       nombre_completo,
@@ -53,10 +56,11 @@ class Usuario {
       contrasena,
       rol_id
     } = data;
+    
     const salt = await bcrypt.genSalt(10);
     const contrasena_hash = await bcrypt.hash(contrasena, salt);
 
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO usuarios
         (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id)
        VALUES ($1, $2, $3, $4, $5)
@@ -76,7 +80,7 @@ class Usuario {
       contrasena_hash = await bcrypt.hash(contrasena, salt);
     }
 
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE usuarios
        SET nombre_completo = $1,
            correo = $2,
@@ -90,8 +94,9 @@ class Usuario {
     );
     return result.rows[0] || null;
   }
+
   static async toggleStatus(id, activo) {
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE usuarios
        SET activo = $1, fecha_actualizacion = CURRENT_TIMESTAMP
        WHERE id = $2
@@ -100,8 +105,9 @@ class Usuario {
     );
     return result.rows[0] || null;
   }
+
   static async delete(id) {
-    const result = await pool.query(
+    const result = await db.query(
       'DELETE FROM usuarios WHERE id = $1 RETURNING id',
       [id]
     );

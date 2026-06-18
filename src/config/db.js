@@ -9,8 +9,9 @@ const pool = new Pool({
   database: process.env.DB_NAME || 'taller_mecanico',
 });
 
-pool.connect()
-  .then(() => console.log('Conectado a PostgreSQL'))
-  .catch(err => console.error('Error al conectar a PostgreSQL:', err));
-
-module.exports = pool;
+module.exports = {
+  // Ejecuta consultas usando el pool
+  query: (text, params) => pool.query(text, params),
+  // Cierra todas las conexiones (vital para que Jest termine bien)
+  end: () => pool.end(),
+};
