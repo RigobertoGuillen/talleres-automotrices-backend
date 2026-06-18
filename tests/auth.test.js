@@ -5,30 +5,29 @@ const db = require('../src/config/db'); // Usar db
 
 describe('Auth Endpoints', () => {
   beforeAll(async () => {
-    try {
-      const contrasenaHash = await bcrypt.hash('admin123', 10);
-      
-      await db.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
-      
-      // 1. Aseguramos que el rol exista
-      await db.query(`
-        INSERT INTO roles (id, nombre, descripcion) 
-        VALUES (1, 'administrador', 'Acceso total al sistema')
-        ON CONFLICT (id) DO NOTHING;
-      `);
+  try {
+    const contrasenaHash = await bcrypt.hash('admin123', 10);
+    
+    await db.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
+    
+    // Añadimos OVERRIDING SYSTEM VALUE
+    await db.query(`
+      INSERT INTO roles (id, nombre, descripcion) 
+      OVERRIDING SYSTEM VALUE
+      VALUES (1, 'administrador', 'Acceso total al sistema')
+      ON CONFLICT (id) DO NOTHING;
+    `);
 
-      // 2. Insertamos el usuario con el hash dinámico
-      await db.query(`
-        INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id)
-        VALUES ('Administrador', 'admin', 'admin@sigta.com', $1, 1)
-        ON CONFLICT (nombre_usuario) DO NOTHING;
-      `, [contrasenaHash]);
-      
-    } catch (err) {
-      console.error('Error en setup auth:', err);
-    }
-  });
-
+    await db.query(`
+      INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id)
+      VALUES ('Administrador', 'admin', 'admin@sigta.com', $1, 1)
+      ON CONFLICT (nombre_usuario) DO NOTHING;
+    `, [contrasenaHash]);
+    
+  } catch (err) {
+    console.error('Error en setup auth:', err);
+  }
+});
   test('POST /api/auth/login - debería devolver 200 y token', async () => {
     const response = await request(app)
       .post('/api/auth/login')
