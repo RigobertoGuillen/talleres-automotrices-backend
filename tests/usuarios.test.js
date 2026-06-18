@@ -6,25 +6,41 @@ describe('Usuarios Endpoints', () => {
   let token;
 
   beforeAll(async () => {
-    // 1. Insertamos el rol omitiendo el campo 'id' para evitar choques con secuencias automáticas
-    await pool.query(`
-      INSERT INTO roles (nombre, descripcion) VALUES
-      ('administrador', 'Acceso total al sistema') 
-      ON CONFLICT (nombre) DO NOTHING;
-    `);
+    try {
+      await pool.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
 
-    // 2. Insertamos al administrador buscando dinámicamente el ID generado para el rol 'administrador'
-    await pool.query(`
-      INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id)
-      VALUES (
-        'Administrador Principal', 
-        'admin', 
-        'admin@sigta.com', 
-        '$2b$10$L7Ym8vU0ZdfM597vFm7vO.N1jGv8yYv8u6rP6t8yXW3Z2u1r2u3v.', 
-        (SELECT id FROM roles WHERE nombre = 'administrador' LIMIT 1)
-      )
-      ON CONFLICT (nombre_usuario) DO NOTHING;
-    `);
+      await pool.query(`
+        INSERT INTO roles (nombre, descripcion) VALUES
+        ('administrador', 'Acceso total al sistema') 
+        ON CONFLICT (nombre) DO NOTHING;
+      `);
+
+      await pool.query(`
+        INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id)
+        VALUES (
+          'Administrador Principal', 
+          'admin', 
+          'admin@sigta.com', 
+          '$2b$10$L7Ym8vU0ZdfM597vFm7vO.N1jGv8yYv8u6rP6t8yXW3Z2u1r2u3v.', 
+          (SELECT id FROM roles WHERE nombre = 'administrador' LIMIT 1)
+        )
+        ON CONFLICT (nombre_usuario) DO NOTHING;
+      `);
+      console.log(' Semilla preventiva de ADMIN inyectada con éxito en Usuarios');
+
+      // 4. Ahora sí, hacemos el login con la garantía de que el usuario ya existe
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          nombre_usuario: 'admin',
+          contrasena: 'admin123'
+        });
+      
+      token = response.body.token;
+    } catch (err) {
+      console.error('Error en el beforeAll de Usuarios:', err);
+    }
+  });
 
     // 3. Ahora sí hacemos el login de forma segura
     const response = await request(app)
