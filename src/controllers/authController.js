@@ -14,9 +14,7 @@ const login = async (req, res) => {
       });
     }
     const usuario = await Usuario.findByUsername(nombre_usuario);
-    if (!usuario) {
-      throw new Error("🔴 CONTROLADOR LOG: Usuario no encontrado en la BD que Jest está leyendo");
-    }
+    
     if (!usuario) {
       return res.status(401).json({
         success: false,
