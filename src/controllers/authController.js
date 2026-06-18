@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const Usuario = require('../models/Usuario');
+
 const JWT_SECRET = 'talleres_automotrices';
+
 const login = async (req, res) => {
   try {
     const { nombre_usuario, contrasena } = req.body;
@@ -24,7 +27,9 @@ const login = async (req, res) => {
         message: 'Usuario inactivo'
       });
     }
-    if (contrasena !== usuario.contrasena_hash) {
+    const passwordValida = await bcrypt.compare(contrasena, usuario.contrasena_hash);
+    
+    if (!passwordValida) {
       return res.status(401).json({
         success: false,
         message: 'Contraseña incorrecta'
@@ -37,9 +42,7 @@ const login = async (req, res) => {
         rol: usuario.rol
       },
       JWT_SECRET,
-      {
-        expiresIn: '8h'
-      }
+      { expiresIn: '8h' }
     );
     return res.status(200).json({
       success: true,
@@ -58,9 +61,8 @@ const login = async (req, res) => {
     console.error('Error en login:', error);
     return res.status(500).json({
       success: false,
-      message: 'Error del servidor'
+      message: 'Error interno del servidor'
     });
   }
 };
-
 module.exports = { login };
