@@ -101,4 +101,3 @@ describe('Usuarios Endpoints', () => {
     expect(response.status).toBe(400);
     expect(response.body.success).toBe(false);
   });
-});
