@@ -14,7 +14,7 @@ INSERT INTO usuarios (
   'Administrador Principal',
   'admin',
   'admin@sigta.com',
-  'admin123',
+  '$2b$10$L7Ym8vU0ZdfM597vFm7vO.N1jGv8yYv8u6rP6t8yXW3Z2u1r2u3v.',
   (SELECT id FROM roles WHERE nombre = 'administrador')
 ) ON CONFLICT (nombre_usuario) DO NOTHING;
 

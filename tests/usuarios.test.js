@@ -33,20 +33,23 @@ describe('Usuarios Endpoints', () => {
   });
 
   test('POST /api/usuarios - debería crear un usuario', async () => {
+    // Generamos un identificador único con el milisegundo actual
+    const usuarioUnico = `juan_${Date.now()}`;
+
     const response = await request(app)
       .post('/api/usuarios')
       .set('Authorization', `Bearer ${token}`)
       .send({
         nombre_completo: 'Juan Pérez',
-        nombre_usuario: 'juan',
-        correo: 'juan@sigta.com',
+        nombre_usuario: usuarioUnico, 
+        correo: `juan_${Date.now()}@sigta.com`, 
         contrasena: 'juan123',
         rol_id: 2
       });
     
     expect(response.status).toBe(201);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('nombre_usuario', 'juan');
+    expect(response.body.data).toHaveProperty('nombre_usuario', usuarioUnico); 
   });
 
   test('POST /api/usuarios - debería devolver 400 con datos incompletos', async () => {
