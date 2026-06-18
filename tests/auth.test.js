@@ -9,9 +9,10 @@ describe('Auth Endpoints', () => {
       // 1. Limpieza radical preventiva
       await pool.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
       
-      // 2. Forzar el ID 1 en roles saltándonos el control del sistema autoincrementable
+      // 2. Insertamos el rol forzando el ID 1 con la cláusula requerida por Postgres
       await pool.query(`
         INSERT INTO roles (id, nombre, descripcion) 
+        OVERRIDING SYSTEM VALUE
         VALUES (1, 'administrador', 'Acceso total al sistema')
         ON CONFLICT (id) DO NOTHING;
       `);
@@ -29,14 +30,6 @@ describe('Auth Endpoints', () => {
         ON CONFLICT (nombre_usuario) DO NOTHING;
       `);
       console.log('Semilla blindada de ADMIN inyectada con éxito');
-
-      // (Solo para usuarios.test.js: mantén el bloque del login aquí abajo)
-      if (typeof request !== 'undefined' && typeof app !== 'undefined') {
-        const response = await request(app)
-          .post('/api/auth/login')
-          .send({ nombre_usuario: 'admin', contrasena: 'admin123' });
-        token = response.body.token;
-      }
     } catch (err) {
       console.error('Error crítico en inyección beforeAll:', err);
     }
