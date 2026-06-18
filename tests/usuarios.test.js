@@ -7,14 +7,17 @@ describe('Usuarios Endpoints', () => {
 
   beforeAll(async () => {
     try {
+      // 1. Limpieza radical preventiva
       await pool.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
-
+      
+      // 2. Forzar el ID 1 en roles saltándonos el control del sistema autoincrementable
       await pool.query(`
-        INSERT INTO roles (nombre, descripcion) VALUES
-        ('administrador', 'Acceso total al sistema') 
-        ON CONFLICT (nombre) DO NOTHING;
+        INSERT INTO roles (id, nombre, descripcion) 
+        VALUES (1, 'administrador', 'Acceso total al sistema')
+        ON CONFLICT (id) DO NOTHING;
       `);
 
+      // 3. Insertar el administrador amarrado directamente al rol_id = 1
       await pool.query(`
         INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id)
         VALUES (
@@ -22,22 +25,21 @@ describe('Usuarios Endpoints', () => {
           'admin', 
           'admin@sigta.com', 
           '$2b$10$L7Ym8vU0ZdfM597vFm7vO.N1jGv8yYv8u6rP6t8yXW3Z2u1r2u3v.', 
-          (SELECT id FROM roles WHERE nombre = 'administrador' LIMIT 1)
+          1
         )
         ON CONFLICT (nombre_usuario) DO NOTHING;
       `);
-      console.log('✅ Semilla preventiva de ADMIN inyectada con éxito en Usuarios');
+      console.log('Semilla blindada de ADMIN inyectada con éxito');
 
-      const response = await request(app)
-        .post('/api/auth/login')
-        .send({
-          nombre_usuario: 'admin',
-          contrasena: 'admin123'
-        });
-      
-      token = response.body.token;
+      // (Solo para usuarios.test.js: mantén el bloque del login aquí abajo)
+      if (typeof request !== 'undefined' && typeof app !== 'undefined') {
+        const response = await request(app)
+          .post('/api/auth/login')
+          .send({ nombre_usuario: 'admin', contrasena: 'admin123' });
+        token = response.body.token;
+      }
     } catch (err) {
-      console.error('❌ Error en el beforeAll de Usuarios:', err);
+      console.error('Error crítico en inyección beforeAll:', err);
     }
   });
 
