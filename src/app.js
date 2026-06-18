@@ -2,12 +2,10 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-
 const authRoutes = require('./routes/authRoutes');
 const usuarioRoutes = require('./routes/usuarioRoutes');
 
 const app = express();
-
 
 app.use(cors());
 app.use(express.json());
@@ -18,6 +16,7 @@ app.use('/api/usuarios', usuarioRoutes);
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Servidor funcionando' });
 });
+
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -31,6 +30,12 @@ app.use((err, req, res, next) => {
     success: false,
     message: 'Error servidor'
   });
+});
+
+// --- ESTO ES LO QUE FALTABA ---
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor escuchando en el puerto ${PORT}`);
 });
 
 module.exports = app;
