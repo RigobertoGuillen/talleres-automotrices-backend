@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('../src/app');
+const bcrypt = require('bcryptjs');
 const db = require('../src/config/db'); // Usar db
 
 describe('Usuarios Endpoints', () => {
@@ -7,6 +8,9 @@ describe('Usuarios Endpoints', () => {
 
   beforeAll(async () => {
     try {
+      const bcrypt = require('bcryptjs'); // Asegúrate de tenerlo importado
+      const contrasenaHash = await bcrypt.hash('admin123', 10); // Genera hash dinámico
+
       await db.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
       
       await db.query(`
@@ -18,16 +22,11 @@ describe('Usuarios Endpoints', () => {
 
       await db.query(`
         INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id)
-        VALUES (
-          'Administrador Principal', 
-          'admin', 
-          'admin@sigta.com', 
-          '$2b$10$L7Ym8vU0ZdfM597vFm7vO.N1jGv8yYv8u6rP6t8yXW3Z2u1r2u3v.', 
-          1
-        )
+        VALUES ('Administrador Principal', 'admin', 'admin@sigta.com', $1, 1)
         ON CONFLICT (nombre_usuario) DO NOTHING;
-      `);
+      `, [contrasenaHash]); // Usamos el hash generado
 
+      // Ahora el login debería funcionar y devolver un token real
       const response = await request(app)
         .post('/api/auth/login')
         .send({
@@ -36,6 +35,11 @@ describe('Usuarios Endpoints', () => {
         });
       
       token = response.body.token;
+      
+      // Opcional: Verifica que realmente recibiste un token
+      if (!token) {
+        throw new Error('No se pudo obtener el token en el setup');
+      }
     } catch (err) {
       console.error('Error en setup usuarios:', err);
     }
