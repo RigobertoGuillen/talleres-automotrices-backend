@@ -25,7 +25,7 @@ services:
           name: taller-db
           property: password
       - key: JWT_SECRET
-        generate: true # Render creará un secret seguro automáticamente
+        value: un_secreto_muy_largo_y_seguro_para_pruebas_12345
 
 databases:
   - name: taller-db
