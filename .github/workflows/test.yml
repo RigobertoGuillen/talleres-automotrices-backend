@@ -1,4 +1,5 @@
 name: Run Tests
+run: npm test -- --runInBand
 
 on:
   pull_request:

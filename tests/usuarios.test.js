@@ -1,34 +1,44 @@
 const request = require('supertest');
 const app = require('../src/app');
+const pool = require('../src/config/db');
 
 describe('Usuarios Endpoints', () => {
   let token;
 
   beforeAll(async () => {
     try {
-      // 1. Intentamos crear el administrador mediante la API directamente
-      await request(app)
-        .post('/api/usuarios')
-        .send({
-          nombre_completo: 'Administrador Principal',
-          nombre_usuario: 'admin',
-          correo: 'admin@sigta.com',
-          contrasena: 'admin123',
-          rol_id: 1
-        });
-    } catch (err) {
-      // Ignorar si ya fue creado previamente
-    }
+      await pool.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
+      
+      await pool.query(`
+        INSERT INTO roles (id, nombre, descripcion) 
+        OVERRIDING SYSTEM VALUE
+        VALUES (1, 'administrador', 'Acceso total al sistema')
+        ON CONFLICT (id) DO NOTHING;
+      `);
 
-    // 2. Realizamos el inicio de sesión para obtener el token de autorización
-    const response = await request(app)
-      .post('/api/auth/login')
-      .send({
-        nombre_usuario: 'admin',
-        contrasena: 'admin123'
-      });
-    
-    token = response.body.token;
+      await pool.query(`
+        INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id)
+        VALUES (
+          'Administrador Principal', 
+          'admin', 
+          'admin@sigta.com', 
+          '$2b$10$L7Ym8vU0ZdfM597vFm7vO.N1jGv8yYv8u6rP6t8yXW3Z2u1r2u3v.', 
+          1
+        )
+        ON CONFLICT (nombre_usuario) DO NOTHING;
+      `);
+
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          nombre_usuario: 'admin',
+          contrasena: 'admin123'
+        });
+      
+      token = response.body.token;
+    } catch (err) {
+      console.error('Error en setup usuarios:', err);
+    }
   });
 
   test('GET /api/usuarios - debería devolver lista de usuarios', async () => {
