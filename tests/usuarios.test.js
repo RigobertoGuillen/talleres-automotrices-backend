@@ -1,6 +1,6 @@
 const request = require('supertest');
 const app = require('../src/app');
-const pool = require('../src/config/db'); // 👈 Importamos el pool para sembrar los datos preventivos
+const pool = require('../src/config/db');
 
 describe('Usuarios Endpoints', () => {
   let token;
@@ -26,9 +26,8 @@ describe('Usuarios Endpoints', () => {
         )
         ON CONFLICT (nombre_usuario) DO NOTHING;
       `);
-      console.log(' Semilla preventiva de ADMIN inyectada con éxito en Usuarios');
+      console.log('✅ Semilla preventiva de ADMIN inyectada con éxito en Usuarios');
 
-      // 4. Ahora sí, hacemos el login con la garantía de que el usuario ya existe
       const response = await request(app)
         .post('/api/auth/login')
         .send({
@@ -38,18 +37,8 @@ describe('Usuarios Endpoints', () => {
       
       token = response.body.token;
     } catch (err) {
-      console.error('Error en el beforeAll de Usuarios:', err);
+      console.error('❌ Error en el beforeAll de Usuarios:', err);
     }
-  });
-
-    // 3. Ahora sí hacemos el login de forma segura
-    const response = await request(app)
-      .post('/api/auth/login')
-      .send({
-        nombre_usuario: 'admin',
-        contrasena: 'admin123'
-      });
-    token = response.body.token;
   });
 
   test('GET /api/usuarios - debería devolver lista de usuarios', async () => {
@@ -71,7 +60,6 @@ describe('Usuarios Endpoints', () => {
   });
 
   test('POST /api/usuarios - debería crear un usuario', async () => {
-    // Generamos un identificador único con el milisegundo actual
     const usuarioUnico = `juan_${Date.now()}`;
 
     const response = await request(app)
@@ -101,3 +89,4 @@ describe('Usuarios Endpoints', () => {
     expect(response.status).toBe(400);
     expect(response.body.success).toBe(false);
   });
+});
