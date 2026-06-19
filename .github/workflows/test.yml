@@ -41,7 +41,7 @@ jobs:
         
       - name: Run migrations
         env:
-          PGPASSWORD: postgres  # ← AGREGAR ESTO
+          PGPASSWORD: postgres
           DB_HOST: localhost
           DB_PORT: 5432
           DB_USER: postgres

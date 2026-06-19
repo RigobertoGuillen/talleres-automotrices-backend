@@ -6,7 +6,7 @@
 * Rigoberto Jose Guillen 20161001007
 * Jose Adrian Peña 20201003550
 * Carlos Edgado Vallecillo 20162001308
-* [Companiero 3]
+* [Joaquin Rafael Chavarria 20171900040
 
 1. Clona este repositorio en tu máquina:
 
