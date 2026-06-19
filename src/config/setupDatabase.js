@@ -185,8 +185,34 @@ const setupDatabase = async () => {
   `;
 
   try {
+    // 1. Ejecutar la creación de tablas
     await pool.query(sql);
-    console.log("Base de datos sincronizada correctamente.");
+    console.log("Tablas creadas correctamente.");
+
+    // 2. Insertar rol administrador
+    await pool.query(`
+      INSERT INTO roles (nombre, descripcion) 
+      VALUES ('administrador', 'Acceso total al sistema') 
+      ON CONFLICT (nombre) DO NOTHING;
+    `);
+
+    // 3. Insertar usuario admin (contraseña: admin)
+    // El hash corresponde a 'admin' generado con bcrypt
+    await pool.query(`
+      INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
+      VALUES (
+        'Administrador', 
+        'admin', 
+        'admin@taller.com', 
+        '$2b$10$eI5V5iC5dF4fFh3lH2kEIOd0I6k/qV4a9S3eGjS9P5T5U5fE2S5qO', 
+        (SELECT id FROM roles WHERE nombre = 'administrador'), 
+        true
+      )
+      ON CONFLICT (nombre_usuario) DO NOTHING;
+    `);
+    
+    console.log("Usuario administrador inicializado.");
+
   } catch (err) {
     console.error("Error al sincronizar base de datos:", err.message);
   }
