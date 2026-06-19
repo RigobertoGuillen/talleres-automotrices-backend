@@ -204,7 +204,7 @@ const setupDatabase = async () => {
         'Administrador', 
         'admin', 
         'admin@taller.com', 
-        '$2b$10$eI5V5iC5dF4fFh3lH2kEIOd0I6k/qV4a9S3eGjS9P5T5U5fE2S5qO', 
+        'TU_NUEVO_HASH_AQUI', 
         (SELECT id FROM roles WHERE nombre = 'administrador'), 
         true
       )
