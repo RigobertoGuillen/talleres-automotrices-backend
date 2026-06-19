@@ -7,7 +7,8 @@ const authRoutes = require('./routes/authRoutes');
 const usuarioRoutes = require('./routes/usuarioRoutes');
 
 const app = express();
-
+const clienteRoutes = require('./routes/clienteRoutes');
+app.use('/api/clientes', clienteRoutes);
 
 app.use(cors());
 app.use(express.json());
@@ -32,5 +33,7 @@ app.use((err, req, res, next) => {
     message: 'Error servidor'
   });
 });
+
+
 
 module.exports = app;
