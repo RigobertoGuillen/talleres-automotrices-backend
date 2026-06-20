@@ -6,7 +6,7 @@ const pool = new Pool({
   port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 5432,
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
-  database: process.env.DB_NAME || 'taller_mecanico',
+  database: process.env.DB_DATABASE || process.env.DB_NAME || 'taller_db_f0r4',
 });
 
 module.exports = {
