@@ -152,9 +152,48 @@ const listarVehiculos = async (req, res) => {
     }
 };
 
+const listarMarcas = async (req, res) => {
+    try {
+        const marcas = await Vehiculo.findAllMarcas();
+        return res.json({ success: true, data: marcas });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: 'Error al listar marcas' });
+    }
+};
+
+const buscarVehiculos = async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q || q.trim() === '') {
+            const vehiculos = await Vehiculo.findAll();
+            return res.json({ success: true, data: vehiculos });
+        }
+        const vehiculos = await Vehiculo.buscar(q.trim());
+        return res.json({ success: true, data: vehiculos });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: 'Error al buscar vehículos' });
+    }
+};
+
+const historialVehiculo = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const historial = await Vehiculo.historial(id);
+        return res.json({ success: true, data: historial });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: 'Error al obtener historial' });
+    }
+};
+
 module.exports = {
     crearVehiculo,
     actualizarVehiculo,
     obtenerVehiculo,
-    listarVehiculos
+    listarVehiculos,
+    listarMarcas,
+    buscarVehiculos,
+    historialVehiculo
 };

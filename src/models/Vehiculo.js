@@ -124,6 +124,48 @@ class Vehiculo {
 
         return result.rows[0] || null;
     }
+
+    static async buscar(q) {
+        const result = await db.query(`
+            SELECT
+                v.id, v.placa, mv.nombre AS marca, v.marca_id,
+                v.modelo, v.anio, v.color, v.tipo, v.cliente_id, v.fecha_registro
+            FROM vehiculos v
+            INNER JOIN marcas_vehiculo mv ON v.marca_id = mv.id
+            WHERE
+                v.placa ILIKE $1
+                OR mv.nombre ILIKE $1
+                OR v.modelo ILIKE $1
+            ORDER BY v.id
+        `, [`%${q}%`]);
+        return result.rows;
+    }
+
+    static async historial(vehiculoId) {
+        const result = await db.query(`
+            SELECT
+                ot.id,
+                ot.numero_orden,
+                ot.fecha_ingreso,
+                ot.descripcion_problema,
+                ot.estado,
+                ot.prioridad,
+                ot.fecha_creacion,
+                u.nombre_completo AS mecanico
+            FROM ordenes_trabajo ot
+            LEFT JOIN usuarios u ON ot.mecanico_id = u.id
+            WHERE ot.vehiculo_id = $1
+            ORDER BY ot.fecha_ingreso DESC
+        `, [vehiculoId]);
+        return result.rows;
+    }
+
+    static async findAllMarcas() {
+        const result = await db.query(
+            'SELECT id, nombre FROM marcas_vehiculo ORDER BY nombre'
+        );
+        return result.rows;
+    }
 }
 
 module.exports = Vehiculo;

@@ -213,6 +213,25 @@ const setupDatabase = async () => {
     
     console.log("Usuario administrador inicializado.");
 
+    // 4. Crear tabla marcas_vehiculo si no existe (necesaria para el módulo de vehículos)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS marcas_vehiculo(
+        id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        nombre varchar(50) NOT NULL UNIQUE
+      );
+    `);
+
+    // 5. Seed de marcas comunes
+    await pool.query(`
+      INSERT INTO marcas_vehiculo (nombre) VALUES
+        ('Toyota'), ('Honda'), ('Nissan'), ('Chevrolet'), ('Ford'),
+        ('Hyundai'), ('Kia'), ('Mazda'), ('Mitsubishi'), ('Suzuki'),
+        ('Volkswagen'), ('BMW'), ('Mercedes-Benz'), ('Jeep'), ('Dodge')
+      ON CONFLICT (nombre) DO NOTHING;
+    `);
+
+    console.log("Marcas de vehículos inicializadas.");
+
   } catch (err) {
     console.error("Error al sincronizar base de datos:", err.message);
   }
