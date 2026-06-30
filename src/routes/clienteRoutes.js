@@ -16,10 +16,19 @@ const router = express.Router();
 router.use(verificarToken);
 router.get('/buscar', verificarRol('administrador', 'recepcionista'), buscarClientes);
 router.get('/dni/:dni', verificarRol('administrador', 'recepcionista'), getClienteByDni);
+
+router.get('/buscar', verificarRol('administrador', 'recepcionista'), buscarClientes);
+router.get('/dni/:dni', verificarRol('administrador', 'recepcionista'), getClienteByDni);
+
 router.get('/', verificarRol('administrador', 'recepcionista'), getClientes);
 router.get('/:id', verificarRol('administrador', 'recepcionista'), getClienteById);
 router.post('/', verificarRol('administrador', 'recepcionista'), createCliente);
 router.put('/:id', verificarRol('administrador', 'recepcionista'), updateCliente);
 router.get('/:id/historial', verificarRol('administrador', 'recepcionista', 'mecanico'), getHistorialCliente);
 router.delete('/:id', verificarRol('administrador'), deleteCliente);
+
+router.get('/:id/historial', verificarRol('administrador', 'recepcionista', 'mecanico'), getHistorialCliente);
+
+router.delete('/:id', verificarRol('administrador'), deleteCliente);
+
 module.exports = router;

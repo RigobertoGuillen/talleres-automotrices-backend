@@ -16,6 +16,7 @@ describe('Clientes Endpoints', () => {
   });
 
   test('POST /api/clientes - debería crear un cliente', async () => {
+  test('POST /api/clientes - deberia crear un cliente', async () => {
     const response = await request(app)
       .post('/api/clientes')
       .set('Authorization', `Bearer ${token}`)
@@ -25,6 +26,8 @@ describe('Clientes Endpoints', () => {
         segundo_nombre: 'Carlos',
         primer_apellido: 'Pérez',
         segundo_apellido: 'Gómez',
+        primer_apellido: 'Perez',
+        segundo_apellido: 'Gomez',
         telefono: '9999-9999',
         correo: 'juan@mail.com',
         direccion: {
@@ -32,6 +35,7 @@ describe('Clientes Endpoints', () => {
           colonia: 'Colonia Centro',
           ciudad: 'Tegucigalpa',
           departamento: 'Francisco Morazán',
+          departamento: 'Francisco Morazan',
           referencia: 'Cerca del parque'
         }
       });
@@ -43,6 +47,7 @@ describe('Clientes Endpoints', () => {
   });
 
   test('GET /api/clientes - debería listar clientes', async () => {
+  test('GET /api/clientes - deberia listar clientes', async () => {
     const response = await request(app)
       .get('/api/clientes')
       .set('Authorization', `Bearer ${token}`);
@@ -55,6 +60,9 @@ describe('Clientes Endpoints', () => {
   test('GET /api/clientes/dni/:dni - debería buscar por DNI', async () => {
     const response = await request(app)
       .get('/api/clientes/dni/1234567890123')
+  test('GET /api/clientes/dni/:dni - deberia buscar por DNI', async () => {
+    const response = await request(app)
+      .get(`/api/clientes/dni/1234567890123`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
@@ -63,6 +71,17 @@ describe('Clientes Endpoints', () => {
   });
 
   test('PUT /api/clientes/:id - debería editar un cliente', async () => {
+  test('GET /api/clientes/buscar?q= - deberia buscar por nombre', async () => {
+    const response = await request(app)
+      .get('/api/clientes/buscar?q=Juan')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('data');
+    expect(Array.isArray(response.body.data)).toBe(true);
+  });
+
+  test('PUT /api/clientes/:id - deberia editar un cliente', async () => {
     const response = await request(app)
       .put(`/api/clientes/${clienteId}`)
       .set('Authorization', `Bearer ${token}`)
@@ -77,6 +96,18 @@ describe('Clientes Endpoints', () => {
   });
 
   test('DELETE /api/clientes/:id - debería eliminar un cliente', async () => {
+  test('GET /api/clientes/:id/historial - deberia obtener historial', async () => {
+    const response = await request(app)
+      .get(`/api/clientes/${clienteId}/historial`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('data');
+    expect(response.body.data).toHaveProperty('cliente');
+    expect(response.body.data).toHaveProperty('historial');
+  });
+
+  test('DELETE /api/clientes/:id - deberia eliminar un cliente', async () => {
     const response = await request(app)
       .delete(`/api/clientes/${clienteId}`)
       .set('Authorization', `Bearer ${token}`);
@@ -86,6 +117,7 @@ describe('Clientes Endpoints', () => {
   });
 
   test('GET /api/clientes/:id - debería devolver 404 después de eliminar', async () => {
+  test('GET /api/clientes/:id - deberia devolver 404 despues de eliminar', async () => {
     const response = await request(app)
       .get(`/api/clientes/${clienteId}`)
       .set('Authorization', `Bearer ${token}`);

@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const bcrypt = require('bcryptjs');
 const Usuario = require('../models/Usuario');
 const TokenRecuperacion = require('../models/TokenRecuperacion');
 const pool = require('../config/db');
@@ -31,7 +32,7 @@ const login = async (req, res) => {
     }
 
     const usuario = await Usuario.findByUsername(nombre_usuario);
-
+    
     if (!usuario) {
       return res.status(401).json({
         success: false,

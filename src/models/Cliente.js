@@ -12,6 +12,7 @@ class Cliente {
     );
     return result.rows;
   }
+
   static async findById(id) {
     const result = await pool.query(
       `SELECT c.*, 
@@ -24,6 +25,7 @@ class Cliente {
     );
     return result.rows[0] || null;
   }
+
   static async findByDni(dni) {
     const result = await pool.query(
       `SELECT c.*, 
@@ -35,6 +37,7 @@ class Cliente {
     );
     return result.rows[0] || null;
   }
+
   static async findByNombre(nombre) {
     const result = await pool.query(
       `SELECT c.*, 
@@ -49,6 +52,7 @@ class Cliente {
     );
     return result.rows;
   }
+
   static async createDireccion({ calle, colonia, ciudad, departamento, referencia }) {
     const result = await pool.query(
       `INSERT INTO direcciones (calle, colonia, ciudad, departamento, referencia) 
@@ -74,6 +78,7 @@ class Cliente {
     );
     return result.rows[0];
   }
+
   static async update(id, data) {
     const cliente = await this.findById(id);
     if (!cliente) return null;
@@ -92,6 +97,7 @@ class Cliente {
         data.direccion_id = direccionId;
       }
     }
+
     const fields = [];
     const values = [];
     let index = 1;
@@ -115,6 +121,7 @@ class Cliente {
     );
     return result.rows[0] || null;
   }
+
   static async registrarAuditoria({ cliente_id, campo_modificado, valor_anterior, valor_nuevo }) {
     const result = await pool.query(
       `INSERT INTO auditoria_clientes (cliente_id, campo_modificado, valor_anterior, valor_nuevo) 
@@ -124,6 +131,7 @@ class Cliente {
     );
     return result.rows[0];
   }
+
   static async delete(id) {
     const checkResult = await pool.query(
       `SELECT COUNT(*) FROM vehiculos v 
@@ -135,6 +143,10 @@ class Cliente {
     const tieneOrdenes = parseInt(checkResult.rows[0].count) > 0;
     if (tieneOrdenes) {
       throw new Error('No se puede eliminar un cliente con órdenes de trabajo activas');
+    
+    const tieneOrdenes = parseInt(checkResult.rows[0].count) > 0;
+    if (tieneOrdenes) {
+      throw new Error('No se puede eliminar un cliente con ordenes de trabajo asociadas');
     }
 
     const result = await pool.query(
@@ -144,4 +156,5 @@ class Cliente {
     return result.rows[0] || null;
   }
 }
+
 module.exports = Cliente;

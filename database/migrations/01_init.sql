@@ -42,25 +42,53 @@ CREATE TABLE permisos_rol(
 
 /*CLIENTES Y VEHICULOS (HU-03, HU-04, HU-05, HU-06)*/
 
+CREATE TABLE direcciones(
+	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	calle varchar(150) NOT NULL,
+	colonia varchar(100) NOT NULL,
+	ciudad varchar(80) NOT NULL,
+	departamento varchar(80) NOT NULL,
+	referencia text 
+);
+
 CREATE TABLE clientes(
 	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-	nombre varchar(150) NOT NULL,
+	dni varchar(13) NOT NULL UNIQUE CHECK (dni ~ '^[0-9]{13}$'),
+	primer_nombre varchar(150) NOT NULL,
+	segundo_nombre varchar(150) NULL,
+	primer_apellido varchar(150) NOT NULL,
+	segundo_apellido varchar(150) NOT NULL,
 	telefono varchar(150) NOT NULL,
 	correo varchar(150),
-	direccion varchar(255),
-	fecha_registro timestamptz NOT NULL DEFAULT now(),
-	editado_por bigint REFERENCES usuarios(id),
-	fecha_edicion timestamptz
+	direccion_id bigint REFERENCES direcciones(id) ON DELETE SET NULL,
+	fecha_registro timestamptz NOT NULL DEFAULT now()
+	
 );
 
 CREATE UNIQUE INDEX clientes_correo_unico
 	ON clientes (lower(correo))
 	WHERE correo IS NOT NULL;
 
+CREATE TABLE auditoria_clientes (
+	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	cliente_id bigint NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+	campo_modificado varchar(50) NOT NULL,
+	valor_anterior text,
+	valor_nuevo text,
+	fecha_hora timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX auditoria_clientes_idx ON auditoria_clientes(cliente_id);
+
+CREATE TABLE marcas_vehiculo(
+	id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	nombre varchar(50) NOT NULL UNIQUE
+);
+
 CREATE TABLE vehiculos(
 	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	placa varchar(15) NOT NULL UNIQUE,
-	marca varchar(50) NOT NULL,
+	marca_id smallint NOT NULL REFERENCES marcas_vehiculo(id),
 	modelo varchar(50) NOT NULL,
 	anio smallint NOT NULL
 		CHECK (anio BETWEEN 1950 AND extract(year FROM now())::int + 1),
@@ -71,14 +99,13 @@ CREATE TABLE vehiculos(
 );
 
 CREATE INDEX vehiculos_clientes_idx ON vehiculos(cliente_id);
-CREATE INDEX vehiculos_placa_idx ON vehiculos(placa);
+CREATE INDEX vehiculos_marca_idx ON vehiculos(marca_id);
 
 /*ORDENES DE TRABAJO E HISTORIAL DE ESTADOS (HU-09, HU-10, HU-11, HU-08)*/
 
 CREATE TABLE ordenes_trabajo(
 	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	numero_orden varchar(20) UNIQUE,
-	cliente_id bigint NOT NULL REFERENCES clientes(id),
 	vehiculo_id bigint NOT NULL REFERENCES vehiculos(id),
 	mecanico_id bigint REFERENCES usuarios(id),
 	fecha_ingreso date NOT NULL DEFAULT current_date,
@@ -92,6 +119,7 @@ CREATE TABLE ordenes_trabajo(
 
 CREATE INDEX ordenes_estado_idx ON ordenes_trabajo(estado);
 CREATE INDEX ordenes_mecanico_idx ON ordenes_trabajo(mecanico_id);
+CREATE INDEX ordenes_vehiculo_idx ON ordenes_trabajo(vehiculo_id);
 CREATE INDEX ordenes_fecha_idx ON ordenes_trabajo(fecha_ingreso);
 
 CREATE TABLE historial_estados_orden(
@@ -134,26 +162,45 @@ CREATE TABLE repuestos(
 	codigo varchar(30) NOT NULL UNIQUE,
 	nombre varchar(150) NOT NULL,
 	categoria_id smallint REFERENCES categorias_repuestos(id),
-	cantidad_disponible integer NOT NULL DEFAULT 0 CHECK (cantidad_disponible >= 0),
-	cantidad_minima integer NOT NULL DEFAULT 0 CHECK (cantidad_minima >=0),
 	precio_unitario numeric(10,2) NOT NULL CHECK (precio_unitario >=0),
-	fecha_actualizacion timestamptz NOT NULL DEFAULT now()
+	fecha_creacion timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX repuestos_categoria_idx ON repuestos(categoria_id);
 
+CREATE TABLE stock_repuestos(
+	repuesto_id bigint PRIMARY KEY REFERENCES repuestos(id) ON DELETE CASCADE,
+	cantidad_disponible integer NOT NULL DEFAULT 0 CHECK (cantidad_disponible >=0),
+	cantidad_minima integer NOT NULL DEFAULT 0 CHECK (cantidad_minima >=0),
+	fecha_actualizacion timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE movimientos_inventario(
+	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	repuesto_id bigint NOT NULL REFERENCES repuestos(id),
+	tipo_movimiento varchar(10) NOT NULL CHECK (tipo_movimiento IN ('entrada','salida')),
+	cantidad integer NOT NULL CHECK (cantidad > 0),
+	motivo varchar(100),
+	orden_id bigint REFERENCES ordenes_trabajo(id),
+	usuario_id bigint REFERENCES usuarios(id),
+	fecha_hora timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX mov_inventario_repuesto_idx ON movimientos_inventario(repuesto_id);
+CREATE INDEX mov_inventario_orden_idx ON movimientos_inventario(orden_id);
+
 CREATE TABLE solicitudes_repuestos(
-	id	bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
-	repuestos_id bigint NOT NULL REFERENCES repuestos(id),
+	repuesto_id bigint NOT NULL REFERENCES repuestos(id),
 	cantidad_solicitada integer NOT NULL CHECK (cantidad_solicitada > 0),
-	precio_unitario numeric(10,2) NOT NULL,
+	precio_historico numeric(10,2) NOT NULL,
 	mecanico_id bigint REFERENCES usuarios(id),
-	fecha_solicitud timestamptz NOT NULL DEFAULT now()	
+	fecha_solicitud timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX solicitudes_orden_idx ON solicitudes_repuestos(orden_id);
-CREATE INDEX solicitudes_repuestos_idx ON solicitudes_repuestos(repuestos_id);
+CREATE INDEX solicitudes_repuesto_idx ON solicitudes_repuestos(repuesto_id);
 
 /*SERVICIO REALIZADOS (HU-20)*/
 
@@ -176,34 +223,3 @@ CREATE TABLE orden_servicio(
 );
 
 CREATE INDEX orden_servicios_orden_idx ON orden_servicio(orden_id);
-
-/*FACTURACION Y PAGOS (HU-14, HU-15)*/
-
-CREATE TABLE facturas(
-	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-	numero_factura varchar(20) UNIQUE,
-	orden_id bigint NOT NULL UNIQUE REFERENCES ordenes_trabajo(id),
-	subtotal numeric(10,2) NOT NULL CHECK (subtotal >= 0),
-	impuestos numeric(10,2) NOT NULL DEFAULT 0 CHECK (impuestos >= 0),
-	total numeric(10,2) NOT NULL CHECK (total >= 0),
-	estado estado_factura NOT NULL DEFAULT 'pendiente',
-	fecha_emision timestamptz NOT NULL DEFAULT now(),
-	fecha_vencimiento date,
-	fecha_pago timestamptz,
-	metodo_pago metodo_pago,
-	recordatorio_enviado boolean NOT NULL DEFAULT false
-
-);
-
-CREATE INDEX facturas_estado_idx ON facturas(estado);
-
-CREATE TABLE pagos(
-	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-	factura_id bigint NOT NULL REFERENCES facturas(id) ON DELETE CASCADE,
-	monto numeric(10,2) NOT NULL CHECK (monto > 0),
-	metodo_pago metodo_pago NOT NULL,
-	fecha_pago timestamptz NOT NULL DEFAULT now(),
-	registrado_por bigint REFERENCES usuarios(id)
-);
-
-CREATE INDEX pagos_factura_idx ON pagos(factura_id);

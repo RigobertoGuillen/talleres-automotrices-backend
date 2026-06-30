@@ -1,4 +1,6 @@
 const Cliente = require('../models/Cliente');
+const pool = require('../config/db');
+
 const getClientes = async (req, res) => {
   try {
     const clientes = await Cliente.findAll();
@@ -8,6 +10,7 @@ const getClientes = async (req, res) => {
     res.status(500).json({ success: false, message: 'Error al obtener clientes' });
   }
 };
+
 const getClienteById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -27,6 +30,7 @@ const buscarClientes = async (req, res) => {
     const { q } = req.query;
     if (!q) {
       return res.status(400).json({ success: false, message: 'Se requiere un término de búsqueda' });
+      return res.status(400).json({ success: false, message: 'Se requiere un termino de busqueda' });
     }
     const clientes = await Cliente.findByNombre(q);
     res.json({ success: true, data: clientes });
@@ -59,6 +63,14 @@ const createCliente = async (req, res) => {
         message: 'DNI, primer nombre, primer apellido y teléfono son obligatorios' 
       });
     }
+
+    if (!dni || !primer_nombre || !primer_apellido || !telefono) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DNI, primer nombre, primer apellido y telefono son obligatorios' 
+      });
+    }
+
     const existe = await Cliente.findByDni(dni);
     if (existe) {
       return res.status(400).json({ success: false, message: 'Ya existe un cliente con este DNI' });
@@ -86,6 +98,7 @@ const createCliente = async (req, res) => {
     res.status(500).json({ success: false, message: 'Error al crear cliente' });
   }
 };
+
 const updateCliente = async (req, res) => {
   try {
     const { id } = req.params;
@@ -95,6 +108,7 @@ const updateCliente = async (req, res) => {
     if (!cliente) {
       return res.status(404).json({ success: false, message: 'Cliente no encontrado' });
     }
+
     if (dni && dni !== cliente.dni) {
       await Cliente.registrarAuditoria({
         cliente_id: id,
@@ -142,6 +156,7 @@ const updateCliente = async (req, res) => {
     res.status(500).json({ success: false, message: 'Error al actualizar cliente' });
   }
 };
+
 const deleteCliente = async (req, res) => {
   try {
     const { id } = req.params;
@@ -158,15 +173,18 @@ const deleteCliente = async (req, res) => {
   } catch (error) {
     console.error('Error:', error);
     if (error.message === 'No se puede eliminar un cliente con órdenes de trabajo activas') {
+    if (error.message === 'No se puede eliminar un cliente con ordenes de trabajo asociadas') {
       return res.status(400).json({ success: false, message: error.message });
     }
     res.status(500).json({ success: false, message: 'Error al eliminar cliente' });
   }
 };
+
 const getHistorialCliente = async (req, res) => {
   try {
     const { id } = req.params;
     const { fecha_inicio, fecha_fin } = req.query;
+
     const cliente = await Cliente.findById(id);
     if (!cliente) {
       return res.status(404).json({ success: false, message: 'Cliente no encontrado' });
