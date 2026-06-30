@@ -48,7 +48,7 @@ jobs:
           DB_PORT: 5432
           DB_USER: postgres
           DB_PASSWORD: postgres
-          DB_NAME: taller_mecanico
+          
         run: |
           psql -h localhost -U postgres -d taller_mecanico -f database/migrations/01_init.sql
           psql -h localhost -U postgres -d taller_mecanico -f database/seeds/01_roles_y_admin.sql
