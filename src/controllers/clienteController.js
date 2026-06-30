@@ -29,6 +29,7 @@ const buscarClientes = async (req, res) => {
   try {
     const { q } = req.query;
     if (!q) {
+      return res.status(400).json({ success: false, message: 'Se requiere un término de búsqueda' });
       return res.status(400).json({ success: false, message: 'Se requiere un termino de busqueda' });
     }
     const clientes = await Cliente.findByNombre(q);
@@ -56,6 +57,12 @@ const getClienteByDni = async (req, res) => {
 const createCliente = async (req, res) => {
   try {
     const { dni, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, telefono, correo, direccion } = req.body;
+    if (!dni || !primer_nombre || !primer_apellido || !telefono) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'DNI, primer nombre, primer apellido y teléfono son obligatorios' 
+      });
+    }
 
     if (!dni || !primer_nombre || !primer_apellido || !telefono) {
       return res.status(400).json({ 
@@ -165,6 +172,7 @@ const deleteCliente = async (req, res) => {
 
   } catch (error) {
     console.error('Error:', error);
+    if (error.message === 'No se puede eliminar un cliente con órdenes de trabajo activas') {
     if (error.message === 'No se puede eliminar un cliente con ordenes de trabajo asociadas') {
       return res.status(400).json({ success: false, message: error.message });
     }

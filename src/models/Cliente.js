@@ -140,6 +140,9 @@ class Cliente {
        )`,
       [id]
     );
+    const tieneOrdenes = parseInt(checkResult.rows[0].count) > 0;
+    if (tieneOrdenes) {
+      throw new Error('No se puede eliminar un cliente con órdenes de trabajo activas');
     
     const tieneOrdenes = parseInt(checkResult.rows[0].count) > 0;
     if (tieneOrdenes) {

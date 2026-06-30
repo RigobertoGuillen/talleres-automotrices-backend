@@ -1,3 +1,4 @@
+const pool = require('../config/db');
 const db = require('../config/db'); // Importamos el objeto db centralizado
 const bcrypt = require('bcryptjs');
 
@@ -13,6 +14,16 @@ class Usuario {
     return result.rows[0] || null;
   }
 
+  static async findByEmail(email) {
+    const result = await pool.query(
+      `SELECT u.*, r.nombre AS rol
+       FROM usuarios u
+       JOIN roles r ON u.rol_id = r.id
+       WHERE u.correo = $1`,
+      [email]
+    );
+    return result.rows[0] || null;
+  }
   static async findAll() {
     const result = await db.query(
       `SELECT
@@ -30,6 +41,7 @@ class Usuario {
     return result.rows;
   }
 
+  // Buscar por ID
   static async findById(id) {
     const result = await db.query(
       `SELECT
@@ -66,7 +78,7 @@ class Usuario {
        VALUES ($1, $2, $3, $4, $5)
        RETURNING
          id, nombre_completo, nombre_usuario, correo, activo, rol_id`,
-      [nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id]
+      [nombre_completo, nombre_usuario, correo, contrasena, rol_id]
     );
     return result.rows[0];
   }
@@ -74,6 +86,7 @@ class Usuario {
   static async update(id, data) {
     const { nombre_completo, correo, contrasena, rol_id } = data;
 
+    const result = await pool.query(
     let contrasena_hash = null;
     if (contrasena) {
       const salt = await bcrypt.genSalt(10);
@@ -84,13 +97,13 @@ class Usuario {
       `UPDATE usuarios
        SET nombre_completo = $1,
            correo = $2,
-           contrasena_hash = COALESCE($3, contrasena_hash),
+           contrasena_hash = $3,
            rol_id = $4,
            fecha_actualizacion = CURRENT_TIMESTAMP
        WHERE id = $5
        RETURNING
          id, nombre_completo, nombre_usuario, correo, activo, rol_id`,
-      [nombre_completo, correo, contrasena_hash, rol_id, id]
+      [nombre_completo, correo, contrasena, rol_id, id]
     );
     return result.rows[0] || null;
   }

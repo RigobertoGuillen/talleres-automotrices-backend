@@ -15,6 +15,7 @@ describe('Clientes Endpoints', () => {
     token = response.body.token;
   });
 
+  test('POST /api/clientes - debería crear un cliente', async () => {
   test('POST /api/clientes - deberia crear un cliente', async () => {
     const response = await request(app)
       .post('/api/clientes')
@@ -23,6 +24,8 @@ describe('Clientes Endpoints', () => {
         dni: '1234567890123',
         primer_nombre: 'Juan',
         segundo_nombre: 'Carlos',
+        primer_apellido: 'Pérez',
+        segundo_apellido: 'Gómez',
         primer_apellido: 'Perez',
         segundo_apellido: 'Gomez',
         telefono: '9999-9999',
@@ -31,6 +34,7 @@ describe('Clientes Endpoints', () => {
           calle: 'Calle Principal',
           colonia: 'Colonia Centro',
           ciudad: 'Tegucigalpa',
+          departamento: 'Francisco Morazán',
           departamento: 'Francisco Morazan',
           referencia: 'Cerca del parque'
         }
@@ -42,6 +46,7 @@ describe('Clientes Endpoints', () => {
     clienteId = response.body.data.id;
   });
 
+  test('GET /api/clientes - debería listar clientes', async () => {
   test('GET /api/clientes - deberia listar clientes', async () => {
     const response = await request(app)
       .get('/api/clientes')
@@ -52,6 +57,9 @@ describe('Clientes Endpoints', () => {
     expect(Array.isArray(response.body.data)).toBe(true);
   });
 
+  test('GET /api/clientes/dni/:dni - debería buscar por DNI', async () => {
+    const response = await request(app)
+      .get('/api/clientes/dni/1234567890123')
   test('GET /api/clientes/dni/:dni - deberia buscar por DNI', async () => {
     const response = await request(app)
       .get(`/api/clientes/dni/1234567890123`)
@@ -62,6 +70,7 @@ describe('Clientes Endpoints', () => {
     expect(response.body.data).toHaveProperty('dni', '1234567890123');
   });
 
+  test('PUT /api/clientes/:id - debería editar un cliente', async () => {
   test('GET /api/clientes/buscar?q= - deberia buscar por nombre', async () => {
     const response = await request(app)
       .get('/api/clientes/buscar?q=Juan')
@@ -86,6 +95,7 @@ describe('Clientes Endpoints', () => {
     expect(response.body.data).toHaveProperty('telefono', '8888-8888');
   });
 
+  test('DELETE /api/clientes/:id - debería eliminar un cliente', async () => {
   test('GET /api/clientes/:id/historial - deberia obtener historial', async () => {
     const response = await request(app)
       .get(`/api/clientes/${clienteId}/historial`)
@@ -106,6 +116,7 @@ describe('Clientes Endpoints', () => {
     expect(response.body).toHaveProperty('success', true);
   });
 
+  test('GET /api/clientes/:id - debería devolver 404 después de eliminar', async () => {
   test('GET /api/clientes/:id - deberia devolver 404 despues de eliminar', async () => {
     const response = await request(app)
       .get(`/api/clientes/${clienteId}`)
