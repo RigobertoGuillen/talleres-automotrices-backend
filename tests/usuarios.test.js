@@ -74,7 +74,7 @@ describe('Usuarios Endpoints', () => {
   });
 
   test('POST /api/usuarios - debería crear un usuario', async () => {
-    const usuarioUnico = 'juan_' + Date.now();
+    
     const usuarioUnico = `juan_${Date.now()}`;
 
     const response = await request(app)
