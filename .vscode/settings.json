@@ -1,5 +1,15 @@
 {
     "files.associations": {
         "plyconfig.json": "jsonc"
-    }
+    },
+
+    "files.exclude": {
+        "**/node_modules": true
+    },
+
+    "search.exclude": {
+        "**/node_modules": true
+    },
+
+    "explorer.excludeGitIgnore": true
 }
