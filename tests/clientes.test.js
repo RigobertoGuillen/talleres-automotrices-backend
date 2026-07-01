@@ -5,20 +5,34 @@ const pool = require('../src/config/db');
 describe('Clientes Endpoints', () => {
   let token;
   let clienteId;
+  const dniPrueba = '1234567890123';
 
   beforeAll(async () => {
+    // Limpiamos residuos de una corrida anterior que haya fallado antes
+    // de llegar al DELETE final, para que el POST no choque con un
+    // DNI duplicado (unique constraint) y devuelva algo distinto de 201.
+    await pool.query('DELETE FROM clientes WHERE dni = $1', [dniPrueba]);
+
     const response = await request(app)
       .post('/api/auth/login')
       .send({
         nombre_usuario: 'admin',
         contrasena: 'admin123'
       });
+
     token = response.body.token;
+
+    if (!token) {
+      throw new Error(
+        'No se pudo obtener el token en el setup de clientes.test.js: ' +
+        JSON.stringify(response.body)
+      );
+    }
   });
 
-  // Cerramos la conexión al terminar este suite
+  // ÚNICO afterAll del archivo
   afterAll(async () => {
-    await pool.end();
+    await pool.end(); // Esto cierra los hilos de manera limpia al terminar esta suite
   });
 
   test('POST /api/clientes - deberia crear un cliente', async () => {
@@ -26,7 +40,7 @@ describe('Clientes Endpoints', () => {
       .post('/api/clientes')
       .set('Authorization', `Bearer ${token}`)
       .send({
-        dni: '1234567890123',
+        dni: dniPrueba,
         primer_nombre: 'Juan',
         segundo_nombre: 'Carlos',
         primer_apellido: 'Perez',
@@ -38,7 +52,7 @@ describe('Clientes Endpoints', () => {
 
     expect(response.status).toBe(201);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('dni', '1234567890123');
+    expect(response.body.data).toHaveProperty('dni', dniPrueba);
     clienteId = response.body.data.id;
   });
 
@@ -54,12 +68,12 @@ describe('Clientes Endpoints', () => {
 
   test('GET /api/clientes/dni/:dni - deberia buscar por DNI', async () => {
     const response = await request(app)
-      .get(`/api/clientes/dni/1234567890123`)
+      .get(`/api/clientes/dni/${dniPrueba}`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('dni', '1234567890123');
+    expect(response.body.data).toHaveProperty('dni', dniPrueba);
   });
 
   test('GET /api/clientes/buscar?q= - deberia buscar por nombre', async () => {
@@ -114,10 +128,4 @@ describe('Clientes Endpoints', () => {
     expect(response.status).toBe(404);
     expect(response.body).toHaveProperty('success', false);
   });
-  
-
-afterAll(async () => {
-  await pool.end(); // Esto cierra los hilos de manera limpia al terminar esta suite
-});
-
 });

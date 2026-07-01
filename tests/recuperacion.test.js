@@ -17,7 +17,7 @@ describe('Recuperacion de Contraseña', () => {
     try {
       // Limpiamos residuos previos por si acaso
       await pool.query('DELETE FROM usuarios WHERE correo = $1 OR nombre_usuario = $2', [testEmail, 'admin_test_rec']);
-      
+
       await pool.query(
         `INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id) 
          VALUES ('Admin Test Rec', 'admin_test_rec', $1, '$2b$10$XQ8sZ9XQ8sZ9XQ8sZ9XQ8uXQ8sZ9XQ8sZ9XQ8sZ9', 1)`,
@@ -28,13 +28,15 @@ describe('Recuperacion de Contraseña', () => {
     }
   }, 10000);
 
+  // ÚNICO afterAll del archivo: limpia datos y cierra el pool UNA sola vez
   afterAll(async () => {
     try {
       await pool.query('DELETE FROM tokens_recuperacion WHERE email = $1', [testEmail]);
       await pool.query('DELETE FROM usuarios WHERE correo = $1', [testEmail]);
-      await pool.end(); // Evita Open Handles de Jest
     } catch (error) {
       console.error('Error limpiando datos:', error.message);
+    } finally {
+      await pool.end(); // Evita Open Handles de Jest (se llama una sola vez)
     }
   }, 10000);
 
@@ -117,9 +119,4 @@ describe('Recuperacion de Contraseña', () => {
     expect(response.status).toBe(400);
     expect(response.body).toHaveProperty('success', false);
   });
-
-
-afterAll(async () => {
-  await pool.end(); // Esto cierra los hilos de manera limpia al terminar esta suite
-});
 });
