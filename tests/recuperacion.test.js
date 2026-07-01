@@ -2,6 +2,7 @@ const request = require('supertest');
 const app = require('../src/app');
 const pool = require('../src/config/db');
 const jwt = require('jsonwebtoken');
+const JWT_SECRET = require('../src/config/jwt');
 
 jest.mock('nodemailer', () => ({
   createTransport: jest.fn().mockReturnValue({

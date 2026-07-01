@@ -1,6 +1,7 @@
 const request = require('supertest');
 const app = require('../src/app');
 const db = require('../src/config/db');
+const JWT_SECRET = require('../src/config/jwt');
 
 describe('Usuarios Endpoints', () => {
   let token;
