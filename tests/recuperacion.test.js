@@ -3,6 +3,12 @@ const app = require('../src/app');
 const pool = require('../src/config/db');
 const jwt = require('jsonwebtoken');
 
+jest.mock('nodemailer', () => ({
+  createTransport: jest.fn().mockReturnValue({
+    sendMail: jest.fn().mockResolvedValue({ messageId: 'test-id-12345' })
+  })
+}));
+
 describe('Recuperacion de Contraseña', () => {
   let testEmail = 'admin_recuperar@sigta.com'; // Email único para este test suite
   const JWT_SECRET = process.env.JWT_SECRET || 'talleres_automotrices';
@@ -111,4 +117,9 @@ describe('Recuperacion de Contraseña', () => {
     expect(response.status).toBe(400);
     expect(response.body).toHaveProperty('success', false);
   });
+
+
+afterAll(async () => {
+  await pool.end(); // Esto cierra los hilos de manera limpia al terminar esta suite
+});
 });

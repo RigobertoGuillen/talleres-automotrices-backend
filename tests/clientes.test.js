@@ -114,4 +114,10 @@ describe('Clientes Endpoints', () => {
     expect(response.status).toBe(404);
     expect(response.body).toHaveProperty('success', false);
   });
+  
+
+afterAll(async () => {
+  await pool.end(); // Esto cierra los hilos de manera limpia al terminar esta suite
+});
+
 });
