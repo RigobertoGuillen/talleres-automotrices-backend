@@ -135,7 +135,7 @@ CREATE INDEX historial_orden_idx ON historial_estados_orden(orden_id);
 CREATE TABLE diagnosticos(
 	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
-	decripcion_falla text NOT NULL,
+	descripcion_falla text NOT NULL,
 	observaciones text,
 	recomendaciones text,
 	estado estado_diagnostico NOT NULL DEFAULT 'pendiente',
