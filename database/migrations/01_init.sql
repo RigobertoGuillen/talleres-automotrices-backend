@@ -51,18 +51,15 @@ CREATE TABLE direcciones(
 	referencia text 
 );
 
-CREATE TABLE clientes(
-	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-	dni varchar(13) NOT NULL UNIQUE CHECK (dni ~ '^[0-9]{13}$'),
-	primer_nombre varchar(150) NOT NULL,
-	segundo_nombre varchar(150) NULL,
-	primer_apellido varchar(150) NOT NULL,
-	segundo_apellido varchar(150) NOT NULL,
-	telefono varchar(150) NOT NULL,
-	correo varchar(150),
-	direccion_id bigint REFERENCES direcciones(id) ON DELETE SET NULL,
-	fecha_registro timestamptz NOT NULL DEFAULT now()
-	
+CREATE TABLE IF NOT EXISTS clientes(
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nombre varchar(150) NOT NULL,
+    telefono varchar(150) NOT NULL,
+    correo varchar(150),
+    direccion varchar(255),
+    fecha_registro timestamptz NOT NULL DEFAULT now(),
+    editado_por bigint REFERENCES usuarios(id),
+    fecha_edicion timestamptz
 );
 
 CREATE UNIQUE INDEX clientes_correo_unico
