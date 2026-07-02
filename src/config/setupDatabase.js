@@ -1,5 +1,5 @@
 const pool = require('./db');
-const hash = await bcrypt.hash('admin', 10);
+const bcrypt = require('bcryptjs');
 
 const setupDatabase = async () => {
   const sql = `
@@ -193,45 +193,44 @@ const setupDatabase = async () => {
         registrado_por bigint REFERENCES usuarios(id)
     );
 
-   CREATE TABLE IF NOT EXISTS tokens_recuperacion(
+    CREATE TABLE IF NOT EXISTS tokens_recuperacion(
         id SERIAL PRIMARY KEY,
         email varchar(150) NOT NULL,
         token varchar(255) NOT NULL,
         expires_at timestamptz NOT NULL,
-        used boolean NOT NULL DEFAULT false,  /* <--- AGREGA ESTA COLUMNA */
+        used boolean NOT NULL DEFAULT false,
         created_at timestamptz NOT NULL DEFAULT now()
     );
   `;
 
   try {
-    // 1. Ejecutar la creación de tablas
     await pool.query(sql);
     console.log("Tablas creadas correctamente.");
 
-    // 2. Insertar rol administrador
     await pool.query(`
       INSERT INTO roles (nombre, descripcion) 
       VALUES ('administrador', 'Acceso total al sistema') 
       ON CONFLICT (nombre) DO NOTHING;
     `);
 
-    // 3. Insertar usuario admin (contraseña: admin)
+    const hash = await bcrypt.hash('admin', 10);
+
     await pool.query(`
-  INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
-  VALUES (
-    'Administrador', 
-    'admin', 
-    'admin@taller.com', 
-    $1, 
-    (SELECT id FROM roles WHERE nombre = 'administrador'), 
-    true
-  )
-  ON CONFLICT (nombre_usuario) DO NOTHING;
-`, [hash]);
-    
+      INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
+      VALUES (
+        'Administrador',
+        'admin',
+        'admin@taller.com',
+        $1,
+        (SELECT id FROM roles WHERE nombre = 'administrador'),
+        true
+      )
+      ON CONFLICT (nombre_usuario) DO NOTHING;
+    `, [hash]);
+
     console.log("Usuario administrador inicializado.");
 
-    // 4. Crear tabla marcas_vehiculo si no existe
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS marcas_vehiculo(
         id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -239,7 +238,6 @@ const setupDatabase = async () => {
       );
     `);
 
-    // 5. Seed de marcas comunes
     await pool.query(`
       INSERT INTO marcas_vehiculo (nombre) VALUES
         ('Toyota'), ('Honda'), ('Nissan'), ('Chevrolet'), ('Ford'),
