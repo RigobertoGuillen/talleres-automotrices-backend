@@ -116,12 +116,12 @@ const register = async (req, res) => {
     const hash = await bcrypt.hash(contrasena, salt);
 
     const usuario = await Usuario.create({
-      nombre_completo,
-      nombre_usuario,
-      correo,
-      contrasena: hash,
-      rol: rol || 'recepcionista'
-    });
+    nombre_completo,
+    nombre_usuario,
+    correo,
+    contrasena,
+    rol_id: rol_id || 3
+});
 
     res.status(201).json({
       success: true,

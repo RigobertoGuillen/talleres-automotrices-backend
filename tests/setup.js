@@ -13,24 +13,41 @@ module.exports = async () => {
   // 2. Ejecutar la migración de las tablas e inserción de datos iniciales
   await setupDatabase();
   
-  // 3. Asegurar que el usuario 'admin' de los tests exista con 'admin123'
   try {
-    const salt = await bcrypt.genSalt(10);
-    const hashContrasena = await bcrypt.hash('admin123', salt);
+  const hashContrasena = await bcrypt.hash('admin123', 10);
 
-    // Limpiamos si ya existe por nombre de usuario para evitar duplicados
-    await pool.query('DELETE FROM usuarios WHERE nombre_usuario = $1', ['admin']);
+  await pool.query(
+    `DELETE FROM usuarios
+     WHERE nombre_usuario = $1`,
+    ['admin']
+  );
 
-    // Insertamos usando el nombre de columna real: contrasena_hash
-    await pool.query(
-      `INSERT INTO usuarios (nombre_usuario, correo, contrasena_hash, rol) 
-       VALUES ($1, $2, $3, $4)`,
-      ['admin', 'admin@taller.com', hashContrasena, 'admin']
-    );
-    console.log('✔ Usuario administrador de pruebas sincronizado con éxito.');
-  } catch (err) {
-    console.error('⚠ Error al crear admin de pruebas:', err.message);
-  }
+  await pool.query(
+    `INSERT INTO usuarios
+    (
+      nombre_completo,
+      nombre_usuario,
+      correo,
+      contrasena_hash,
+      rol_id,
+      activo
+    )
+    VALUES ($1,$2,$3,$4,$5,$6)`,
+    [
+      'Administrador',
+      'admin',
+      'admin@taller.com',
+      hashContrasena,
+      1,
+      true
+    ]
+  );
+
+  console.log('✔ Usuario administrador de pruebas creado.');
+}
+catch(err){
+  console.error(err);
+}
 
   console.log('--- Base de Datos Inicializada Correctamente ---\n');
 };
