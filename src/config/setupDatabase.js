@@ -1,4 +1,5 @@
 const pool = require('./db');
+const hash = await bcrypt.hash('admin', 10);
 
 const setupDatabase = async () => {
   const sql = `
@@ -216,17 +217,17 @@ const setupDatabase = async () => {
 
     // 3. Insertar usuario admin (contraseña: admin)
     await pool.query(`
-      INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
-      VALUES (
-        'Administrador', 
-        'admin', 
-        'admin@taller.com', 
-        '$2a$10$TxDLbuax9p9qxetB/8Dyeum9UBphsVNRYzRHSUeNklmjd6TI8HiKS',, 
-        (SELECT id FROM roles WHERE nombre = 'administrador'), 
-        true
-      )
-      ON CONFLICT (nombre_usuario) DO NOTHING;
-    `);
+  INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
+  VALUES (
+    'Administrador', 
+    'admin', 
+    'admin@taller.com', 
+    $1, 
+    (SELECT id FROM roles WHERE nombre = 'administrador'), 
+    true
+  )
+  ON CONFLICT (nombre_usuario) DO NOTHING;
+`, [hash]);
     
     console.log("Usuario administrador inicializado.");
 
