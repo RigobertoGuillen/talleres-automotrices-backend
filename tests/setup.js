@@ -14,17 +14,16 @@ module.exports = async () => {
   await setupDatabase();
   
   // 3. Asegurar que el usuario 'admin' de los tests exista con 'admin123'
-  try {
-    // Si tu sistema usa contraseñas encriptadas con bcrypt:
+ try {
     const salt = await bcrypt.genSalt(10);
     const hashContrasena = await bcrypt.hash('admin123', salt);
 
-    // Limpiamos si ya existe para evitar conflictos de llaves únicas
-    await pool.query('DELETE FROM usuarios WHERE nombre_usuario = $1 OR correo = $2', ['admin', 'admin@taller.com']);
+    // Limpiamos si ya existe por nombre de usuario
+    await pool.query('DELETE FROM usuarios WHERE nombre_usuario = $1', ['admin']);
 
-    // Insertamos el admin con la estructura exacta que pide tu tabla usuarios
+    // CAMBIAMOS 'contrasena' por 'password'
     await pool.query(
-      `INSERT INTO usuarios (nombre_usuario, correo, contrasena, rol) 
+      `INSERT INTO usuarios (nombre_usuario, correo, password, rol) 
        VALUES ($1, $2, $3, $4)`,
       ['admin', 'admin@taller.com', hashContrasena, 'admin']
     );
