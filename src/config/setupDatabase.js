@@ -117,7 +117,7 @@ const setupDatabase = async () => {
     CREATE TABLE IF NOT EXISTS diagnosticos(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
-        decripcion_falla text NOT NULL,
+        descripcion_falla text NOT NULL,
         observaciones text,
         recomendaciones text,
         estado estado_diagnostico NOT NULL DEFAULT 'pendiente',

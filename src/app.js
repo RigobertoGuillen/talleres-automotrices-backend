@@ -6,6 +6,7 @@ const authRoutes = require('./routes/authRoutes');
 const usuarioRoutes = require('./routes/usuarioRoutes');
 const clienteRoutes = require('./routes/clienteRoutes');
 const vehiculoRoutes = require('./routes/vehiculoRoutes');
+const diagnosticoRoutes = require('./routes/diagnosticoRoutes');
 
 
 const app = express();
@@ -19,7 +20,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/clientes', clienteRoutes);
 app.use('/api/vehiculos', vehiculoRoutes);
-app.use('/api/clientes', clienteRoutes);
+app.use('/api/diagnosticos', diagnosticoRoutes);
 
 
 app.get('/api/health', (req, res) => {
