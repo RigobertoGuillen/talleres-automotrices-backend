@@ -59,11 +59,9 @@ describe('Recuperacion de Contraseña', () => {
   });
 
   test('POST /api/auth/restablecer - debería restablecer contraseña con token válido', async () => {
-    // Generar un JWT real
     const payload = { email: testEmail, id: 1 };
     const validToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
 
-    // Guardar el token en la base de datos
     await pool.query(
       `INSERT INTO tokens_recuperacion (email, token, expires_at) 
        VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
@@ -81,14 +79,12 @@ describe('Recuperacion de Contraseña', () => {
     expect(response.body).toHaveProperty('success', true);
     expect(response.body).toHaveProperty('message', 'Contraseña actualizada correctamente');
 
-    // Verificar que el token se marcó como usado
     const tokenUsed = await pool.query(
       'SELECT used FROM tokens_recuperacion WHERE token = $1',
       [validToken]
     );
     expect(tokenUsed.rows[0]?.used).toBe(true);
 
-    // Restaurar contraseña original
     await pool.query(
       `UPDATE usuarios SET contrasena_hash = '$2b$10$XQ8sZ9XQ8sZ9XQ8sZ9XQ8uXQ8sZ9XQ8sZ9XQ8sZ9' 
        WHERE nombre_usuario = 'admin'`

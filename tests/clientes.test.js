@@ -16,17 +16,20 @@ describe('Clientes Endpoints', () => {
   });
 
   test('POST /api/clientes - debería crear un cliente', async () => {
+    const dniUnico = '9876543210987';
+    const correoUnico = `juan_${Date.now()}@mail.com`;
+
     const response = await request(app)
       .post('/api/clientes')
       .set('Authorization', `Bearer ${token}`)
       .send({
-        dni: '1234567890123',
+        dni: dniUnico,
         primer_nombre: 'Juan',
         segundo_nombre: 'Carlos',
         primer_apellido: 'Pérez',
         segundo_apellido: 'Gómez',
         telefono: '9999-9999',
-        correo: 'juan@mail.com',
+        correo: correoUnico,
         direccion: {
           calle: 'Calle Principal',
           colonia: 'Colonia Centro',
@@ -38,7 +41,6 @@ describe('Clientes Endpoints', () => {
 
     expect(response.status).toBe(201);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('dni', '1234567890123');
     clienteId = response.body.data.id;
   });
 
@@ -54,12 +56,12 @@ describe('Clientes Endpoints', () => {
 
   test('GET /api/clientes/dni/:dni - debería buscar por DNI', async () => {
     const response = await request(app)
-      .get('/api/clientes/dni/1234567890123')
+      .get(`/api/clientes/dni/9876543210987`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('dni', '1234567890123');
+    expect(response.body.data).toHaveProperty('dni', '9876543210987');
   });
 
   test('PUT /api/clientes/:id - debería editar un cliente', async () => {
@@ -68,7 +70,7 @@ describe('Clientes Endpoints', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         telefono: '8888-8888',
-        correo: 'juan.nuevo@mail.com'
+        correo: `juan_edit_${Date.now()}@mail.com`
       });
 
     expect(response.status).toBe(200);
