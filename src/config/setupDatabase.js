@@ -1,4 +1,5 @@
 const pool = require('./db');
+const hash = await bcrypt.hash('admin', 10);
 
 const setupDatabase = async () => {
   const sql = `
@@ -58,12 +59,21 @@ const setupDatabase = async () => {
         PRIMARY KEY (rol_id, modulo_id)
     );
 
+    CREATE TABLE IF NOT EXISTS direcciones(
+        id SERIAL PRIMARY KEY,
+        calle varchar(255) NOT NULL,
+        colonia varchar(255) NOT NULL,
+        ciudad varchar(100) NOT NULL,
+        departamento varchar(100) NOT NULL,
+        referencia text
+    );
+
     CREATE TABLE IF NOT EXISTS clientes(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         nombre varchar(150) NOT NULL,
         telefono varchar(150) NOT NULL,
         correo varchar(150),
-        direccion varchar(255),
+        direccion varchar(255),  /* Volvemos a la columna original que busca tu modelo */
         fecha_registro timestamptz NOT NULL DEFAULT now(),
         editado_por bigint REFERENCES usuarios(id),
         fecha_edicion timestamptz
@@ -182,6 +192,15 @@ const setupDatabase = async () => {
         fecha_pago timestamptz NOT NULL DEFAULT now(),
         registrado_por bigint REFERENCES usuarios(id)
     );
+
+   CREATE TABLE IF NOT EXISTS tokens_recuperacion(
+        id SERIAL PRIMARY KEY,
+        email varchar(150) NOT NULL,
+        token varchar(255) NOT NULL,
+        expires_at timestamptz NOT NULL,
+        used boolean NOT NULL DEFAULT false,  /* <--- AGREGA ESTA COLUMNA */
+        created_at timestamptz NOT NULL DEFAULT now()
+    );
   `;
 
   try {
@@ -197,23 +216,22 @@ const setupDatabase = async () => {
     `);
 
     // 3. Insertar usuario admin (contraseña: admin)
-    // El hash corresponde a 'admin' generado con bcrypt
     await pool.query(`
-      INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
-      VALUES (
-        'Administrador', 
-        'admin', 
-        'admin@taller.com', 
-        'TU_NUEVO_HASH_AQUI', 
-        (SELECT id FROM roles WHERE nombre = 'administrador'), 
-        true
-      )
-      ON CONFLICT (nombre_usuario) DO NOTHING;
-    `);
+  INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
+  VALUES (
+    'Administrador', 
+    'admin', 
+    'admin@taller.com', 
+    $1, 
+    (SELECT id FROM roles WHERE nombre = 'administrador'), 
+    true
+  )
+  ON CONFLICT (nombre_usuario) DO NOTHING;
+`, [hash]);
     
     console.log("Usuario administrador inicializado.");
 
-    // 4. Crear tabla marcas_vehiculo si no existe (necesaria para el módulo de vehículos)
+    // 4. Crear tabla marcas_vehiculo si no existe
     await pool.query(`
       CREATE TABLE IF NOT EXISTS marcas_vehiculo(
         id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
