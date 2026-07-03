@@ -12,7 +12,6 @@ jest.mock('nodemailer', () => ({
 
 describe('Recuperacion de Contraseña', () => {
   let testEmail = 'admin_recuperar@sigta.com'; // Email único para este test suite
-  const JWT_SECRET = process.env.JWT_SECRET || 'talleres_automotrices';
 
   beforeAll(async () => {
     try {
@@ -69,10 +68,9 @@ describe('Recuperacion de Contraseña', () => {
   });
 
   test('POST /api/auth/restablecer - debería restablecer contraseña con token válido', async () => {
-    const payload = { email: testEmail, id: 999 };
+    const payload = { email: testEmail, id: 1 };
     const validToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
 
-    // Insertamos en la tabla respetando únicamente las columnas existentes reales
     await pool.query(
       `INSERT INTO tokens_recuperacion (email, token, expires_at) 
        VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
@@ -89,6 +87,17 @@ describe('Recuperacion de Contraseña', () => {
     // Validamos la respuesta del controlador
     expect(response.status).toBe(200);
     expect(response.body).toHaveProperty('success', true);
+    expect(response.body).toHaveProperty('message', 'Contraseña actualizada correctamente');
+
+    const tokenUsed = await pool.query(
+      'SELECT used FROM tokens_recuperacion WHERE token = $1',
+      [validToken]
+    );
+    expect(tokenUsed.rows[0]?.used).toBe(true);
+
+    // No hace falta "deshacer" el cambio de contraseña aquí: el usuario
+    // afectado es admin_test_rec (buscado por testEmail, no 'admin'), y
+    // el afterAll ya lo borra por completo al final de la suite.
   }, 10000);
 
   test('POST /api/auth/restablecer - debería fallar con token inválido', async () => {

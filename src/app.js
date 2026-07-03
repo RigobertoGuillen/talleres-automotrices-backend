@@ -5,6 +5,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/authRoutes');
 const usuarioRoutes = require('./routes/usuarioRoutes');
 const clienteRoutes = require('./routes/clienteRoutes');
+const ordenRoutes = require('./routes/ordenRoutes');
 const vehiculoRoutes = require('./routes/vehiculoRoutes');
 
 
@@ -18,8 +19,9 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/clientes', clienteRoutes);
+app.use('/api/ordenes', ordenRoutes);
 app.use('/api/vehiculos', vehiculoRoutes);
-app.use('/api/clientes', clienteRoutes);
+
 
 
 app.get('/api/health', (req, res) => {
