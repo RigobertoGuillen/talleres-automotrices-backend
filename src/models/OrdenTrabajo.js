@@ -5,7 +5,7 @@ class OrdenTrabajo {
     let query = `
       SELECT o.*, 
              v.placa, v.modelo,
-             c.primer_nombre, c.primer_apellido,
+             c.nombre as cliente_nombre,
              u.nombre_completo as mecanico_nombre
       FROM ordenes_trabajo o
       JOIN vehiculos v ON o.vehiculo_id = v.id
@@ -46,7 +46,7 @@ class OrdenTrabajo {
     const result = await pool.query(
       `SELECT o.*, 
               v.placa, v.modelo, v.marca_id, v.anio,
-              c.id as cliente_id, c.primer_nombre, c.primer_apellido, c.telefono,
+              c.id as cliente_id, c.nombre as cliente_nombre, c.telefono,
               u.id as mecanico_id, u.nombre_completo as mecanico_nombre,
               COALESCE(
                 (SELECT json_agg(json_build_object(
@@ -166,7 +166,7 @@ class OrdenTrabajo {
     const result = await pool.query(
       `SELECT o.*, 
               v.placa, v.modelo,
-              c.primer_nombre, c.primer_apellido
+              c.nombre as cliente_nombre
        FROM ordenes_trabajo o
        JOIN vehiculos v ON o.vehiculo_id = v.id
        JOIN clientes c ON v.cliente_id = c.id

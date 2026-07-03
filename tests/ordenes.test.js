@@ -32,16 +32,19 @@ describe('Ordenes de Trabajo Endpoints', () => {
     } else {
       const clienteResult = await pool.query("SELECT id FROM clientes LIMIT 1");
       let clienteId = clienteResult.rows[0]?.id;
-      
+
       if (!clienteId) {
+        // La tabla clientes solo tiene id (autogenerado), nombre y telefono
+        // como campos obligatorios. No se inserta id manualmente porque es
+        // GENERATED ALWAYS AS IDENTITY.
         const newCliente = await pool.query(
-          `INSERT INTO clientes (id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, telefono) 
-           VALUES ('9999999999999', 'Prueba', 'Ordenes', 'Test', 'Test', '8888-8888') 
+          `INSERT INTO clientes (nombre, telefono) 
+           VALUES ('Cliente Prueba Ordenes', '8888-8888') 
            RETURNING id`
         );
         clienteId = newCliente.rows[0].id;
       }
-      
+
       const newVehiculo = await pool.query(
         `INSERT INTO vehiculos (placa, marca_id, modelo, anio, color, tipo, cliente_id) 
          VALUES ('ORD-999', 1, 'Prueba', 2020, 'Blanco', 'turismo', $1) 
