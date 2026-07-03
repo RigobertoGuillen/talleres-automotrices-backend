@@ -12,6 +12,18 @@ class Usuario {
     );
     return result.rows[0] || null;
   }
+
+  static async findByEmail(email) {
+    const result = await pool.query(
+      `SELECT u.*, r.nombre AS rol
+       FROM usuarios u
+       JOIN roles r ON u.rol_id = r.id
+       WHERE u.correo = $1`,
+      [email]
+    );
+    return result.rows[0] || null;
+  }
+
   static async findAll() {
     const result = await pool.query(
       `SELECT
@@ -28,6 +40,7 @@ class Usuario {
     );
     return result.rows;
   }
+
   static async findById(id) {
     const result = await pool.query(
       `SELECT
@@ -45,6 +58,7 @@ class Usuario {
     );
     return result.rows[0] || null;
   }
+
   static async create(data) {
     const {
       nombre_completo,
@@ -90,6 +104,7 @@ class Usuario {
     );
     return result.rows[0] || null;
   }
+
   static async toggleStatus(id, activo) {
     const result = await pool.query(
       `UPDATE usuarios
@@ -100,6 +115,7 @@ class Usuario {
     );
     return result.rows[0] || null;
   }
+
   static async delete(id) {
     const result = await pool.query(
       'DELETE FROM usuarios WHERE id = $1 RETURNING id',
