@@ -51,7 +51,7 @@ class OrdenTrabajo {
               COALESCE(
                 (SELECT json_agg(json_build_object(
                   'id', d.id,
-                  'descripcion_falla', d.decripcion_falla,
+                  'descripcion_falla', d.descripcion_falla,
                   'observaciones', d.observaciones,
                   'estado', d.estado
                 )) FROM diagnosticos d WHERE d.orden_id = o.id),
