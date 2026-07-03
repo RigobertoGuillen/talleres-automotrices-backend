@@ -45,7 +45,7 @@ class OrdenTrabajo {
   static async findById(id) {
     const result = await pool.query(
       `SELECT o.*, 
-              v.placa, v.modelo, v.marca_id, v.anio,
+              v.placa, v.modelo, v.marca, v.anio,
               c.id as cliente_id, c.nombre as cliente_nombre, c.telefono,
               u.id as mecanico_id, u.nombre_completo as mecanico_nombre,
               COALESCE(

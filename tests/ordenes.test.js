@@ -46,8 +46,8 @@ describe('Ordenes de Trabajo Endpoints', () => {
       }
 
       const newVehiculo = await pool.query(
-        `INSERT INTO vehiculos (placa, marca_id, modelo, anio, color, tipo, cliente_id) 
-         VALUES ('ORD-999', 1, 'Prueba', 2020, 'Blanco', 'turismo', $1) 
+        `INSERT INTO vehiculos (placa, marca, modelo, anio, color, tipo, cliente_id) 
+         VALUES ('ORD-999', 'Toyota', 'Prueba', 2020, 'Blanco', 'turismo', $1) 
          RETURNING id`,
         [clienteId]
       );
