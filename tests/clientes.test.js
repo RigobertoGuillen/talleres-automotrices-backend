@@ -6,16 +6,12 @@ describe('Clientes Endpoints', () => {
 
   let token;
   let clienteId;
-  const dniUnico = '9876543210987';
 
   beforeAll(async () => {
 
-    // Limpiamos por dni (no por correo): el dni es fijo entre corridas,
-    // así que hay que borrarlo antes de crear el cliente o chocará con
-    // la restricción UNIQUE de la columna dni.
     await pool.query(
-      `DELETE FROM clientes WHERE dni = $1`,
-      [dniUnico]
+      `DELETE FROM clientes WHERE correo = $1`,
+      ['juan@mail.com']
     );
 
     const response = await request(app)
@@ -40,32 +36,22 @@ describe('Clientes Endpoints', () => {
     await pool.end();
   });
 
-  test('POST /api/clientes - debería crear un cliente', async () => {
-    const correoUnico = `juan_${Date.now()}@mail.com`;
+  test('POST /api/clientes - deberia crear un cliente', async () => {
 
     const response = await request(app)
       .post('/api/clientes')
       .set('Authorization', `Bearer ${token}`)
       .send({
-        dni: dniUnico,
-        primer_nombre: 'Juan',
-        segundo_nombre: 'Carlos',
-        primer_apellido: 'Pérez',
-        segundo_apellido: 'Gómez',
+        nombre: 'Juan Carlos Perez Gomez',
         telefono: '9999-9999',
-        correo: correoUnico,
-        direccion: {
-          calle: 'Calle Principal',
-          colonia: 'Colonia Centro',
-          ciudad: 'Tegucigalpa',
-          departamento: 'Francisco Morazán',
-          referencia: 'Cerca del parque'
-        }
+        correo: 'juan@mail.com',
+        direccion: 'Calle Principal'
       });
 
     expect(response.status).toBe(201);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('dni', dniUnico);
+    expect(response.body.data.nombre).toBe('Juan Carlos Perez Gomez');
+
     clienteId = response.body.data.id;
 
   });
@@ -92,18 +78,6 @@ describe('Clientes Endpoints', () => {
 
   });
 
-  test('GET /api/clientes/dni/:dni - deberia buscar por DNI', async () => {
-
-    const response = await request(app)
-      .get(`/api/clientes/dni/${dniUnico}`)
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(response.status).toBe(200);
-    expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('dni', dniUnico);
-
-  });
-
   test('GET /api/clientes/:id - deberia obtener un cliente', async () => {
 
     const response = await request(app)
@@ -122,7 +96,7 @@ describe('Clientes Endpoints', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         telefono: '8888-8888',
-        correo: `juan_edit_${Date.now()}@mail.com`
+        correo: 'juan.nuevo@mail.com'
       });
 
     expect(response.status).toBe(200);

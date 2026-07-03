@@ -35,7 +35,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
       
       if (!clienteId) {
         const newCliente = await pool.query(
-          `INSERT INTO clientes (dni, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, telefono) 
+          `INSERT INTO clientes (id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, telefono) 
            VALUES ('9999999999999', 'Prueba', 'Ordenes', 'Test', 'Test', '8888-8888') 
            RETURNING id`
         );
