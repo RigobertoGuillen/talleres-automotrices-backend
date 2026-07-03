@@ -103,6 +103,7 @@ CREATE INDEX vehiculos_marca_idx ON vehiculos(marca);
 CREATE TABLE ordenes_trabajo(
 	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	numero_orden varchar(20) UNIQUE,
+	cliente_id bigint NOT NULL REFERENCES clientes(id),
 	vehiculo_id bigint NOT NULL REFERENCES vehiculos(id),
 	mecanico_id bigint REFERENCES usuarios(id),
 	fecha_ingreso date NOT NULL DEFAULT current_date,
