@@ -2,6 +2,13 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 const isProduction = process.env.NODE_ENV === 'production';
+const isTest = process.env.NODE_ENV === 'test';
+
+// Configuramos SSL si estamos en producción (Render) 
+// o si estamos ejecutando los tests contra una base de datos remota.
+const sslConfig = (isProduction || isTest) 
+  ? { rejectUnauthorized: false } 
+  : false;
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -9,11 +16,7 @@ const pool = new Pool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-
-  
-  ssl: isProduction
-    ? { rejectUnauthorized: false }
-    : false
+  ssl: sslConfig
 });
 
 module.exports = {
