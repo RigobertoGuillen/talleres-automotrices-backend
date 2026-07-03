@@ -50,7 +50,7 @@ services:
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=postgres
-      - DB_NAME=taller_mecanico
+      - DB_NAME=taller_db_f0r4
     depends_on:
       postgres:
         condition: service_healthy # Espera a que la BD esté realmente lista

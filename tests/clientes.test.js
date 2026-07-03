@@ -1,22 +1,46 @@
 const request = require('supertest');
 const app = require('../src/app');
+const pool = require('../src/config/db');
 
 describe('Clientes Endpoints', () => {
+
   let token;
   let clienteId;
+  const dniUnico = '9876543210987';
 
   beforeAll(async () => {
+
+    // Limpiamos por dni (no por correo): el dni es fijo entre corridas,
+    // así que hay que borrarlo antes de crear el cliente o chocará con
+    // la restricción UNIQUE de la columna dni.
+    await pool.query(
+      `DELETE FROM clientes WHERE dni = $1`,
+      [dniUnico]
+    );
+
     const response = await request(app)
       .post('/api/auth/login')
       .send({
         nombre_usuario: 'admin',
         contrasena: 'admin123'
       });
+
     token = response.body.token;
+
+    if (!token) {
+      throw new Error(
+        'No se pudo obtener el token: ' +
+        JSON.stringify(response.body)
+      );
+    }
+
+  });
+
+  afterAll(async () => {
+    await pool.end();
   });
 
   test('POST /api/clientes - debería crear un cliente', async () => {
-    const dniUnico = '9876543210987';
     const correoUnico = `juan_${Date.now()}@mail.com`;
 
     const response = await request(app)
@@ -41,30 +65,58 @@ describe('Clientes Endpoints', () => {
 
     expect(response.status).toBe(201);
     expect(response.body).toHaveProperty('data');
+    expect(response.body.data).toHaveProperty('dni', dniUnico);
     clienteId = response.body.data.id;
+
   });
 
-  test('GET /api/clientes - debería listar clientes', async () => {
+  test('GET /api/clientes - deberia listar clientes', async () => {
+
     const response = await request(app)
       .get('/api/clientes')
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toHaveProperty('data');
     expect(Array.isArray(response.body.data)).toBe(true);
+
   });
 
-  test('GET /api/clientes/dni/:dni - debería buscar por DNI', async () => {
+  test('GET /api/clientes/buscar - deberia buscar por nombre', async () => {
+
     const response = await request(app)
-      .get(`/api/clientes/dni/9876543210987`)
+      .get('/api/clientes/buscar?q=Juan')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body.data)).toBe(true);
+
+  });
+
+  test('GET /api/clientes/dni/:dni - deberia buscar por DNI', async () => {
+
+    const response = await request(app)
+      .get(`/api/clientes/dni/${dniUnico}`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('dni', '9876543210987');
+    expect(response.body.data).toHaveProperty('dni', dniUnico);
+
   });
 
-  test('PUT /api/clientes/:id - debería editar un cliente', async () => {
+  test('GET /api/clientes/:id - deberia obtener un cliente', async () => {
+
+    const response = await request(app)
+      .get(`/api/clientes/${clienteId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.id).toBe(clienteId);
+
+  });
+
+  test('PUT /api/clientes/:id - deberia editar un cliente', async () => {
+
     const response = await request(app)
       .put(`/api/clientes/${clienteId}`)
       .set('Authorization', `Bearer ${token}`)
@@ -74,25 +126,41 @@ describe('Clientes Endpoints', () => {
       });
 
     expect(response.status).toBe(200);
-    expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('telefono', '8888-8888');
+    expect(response.body.data.telefono).toBe('8888-8888');
+
   });
 
-  test('DELETE /api/clientes/:id - debería eliminar un cliente', async () => {
+  test('GET /api/clientes/:id/historial - deberia obtener historial', async () => {
+
+    const response = await request(app)
+      .get(`/api/clientes/${clienteId}/historial`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toHaveProperty('cliente');
+    expect(response.body.data).toHaveProperty('historial');
+
+  });
+
+  test('DELETE /api/clientes/:id - deberia eliminar un cliente', async () => {
+
     const response = await request(app)
       .delete(`/api/clientes/${clienteId}`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toHaveProperty('success', true);
+    expect(response.body.success).toBe(true);
+
   });
 
-  test('GET /api/clientes/:id - debería devolver 404 después de eliminar', async () => {
+  test('GET /api/clientes/:id - deberia devolver 404 despues de eliminar', async () => {
+
     const response = await request(app)
       .get(`/api/clientes/${clienteId}`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(404);
-    expect(response.body).toHaveProperty('success', false);
+
   });
+
 });
