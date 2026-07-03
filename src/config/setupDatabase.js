@@ -249,8 +249,9 @@ const setupDatabase = async () => {
     console.log("Marcas de vehículos inicializadas.");
 
   } catch (err) {
-    console.error("Error al sincronizar base de datos:", err.message);
-  }
+  console.error("Error completo al sincronizar base de datos:", err);
+  throw err;
+}
 };
 
 module.exports = setupDatabase;
