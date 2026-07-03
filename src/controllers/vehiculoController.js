@@ -51,7 +51,15 @@ const crearVehiculo = async (req, res) => {
             });
         }
 
-        const vehiculo = await Vehiculo.create(req.body);
+        const vehiculo = await Vehiculo.create({
+    placa,
+    marca,
+    modelo,
+    anio,
+    color,
+    tipo,
+    cliente_id
+});
 
         return res.status(201).json({
             success: true,
