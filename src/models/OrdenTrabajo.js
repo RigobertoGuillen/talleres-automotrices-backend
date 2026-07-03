@@ -80,12 +80,28 @@ class OrdenTrabajo {
 
   static async create(data) {
     const { vehiculo_id, descripcion_problema, prioridad = 0 } = data;
+
+    // cliente_id es NOT NULL en ordenes_trabajo. Todo vehículo ya pertenece
+    // a un cliente, así que lo derivamos de ahí en vez de exigirlo aparte.
+    const vehiculoResult = await pool.query(
+      'SELECT cliente_id FROM vehiculos WHERE id = $1',
+      [vehiculo_id]
+    );
+
+    if (vehiculoResult.rows.length === 0) {
+      const error = new Error('Vehículo no encontrado');
+      error.code = 'VEHICULO_NO_ENCONTRADO';
+      throw error;
+    }
+
+    const cliente_id = vehiculoResult.rows[0].cliente_id;
+
     const result = await pool.query(
       `INSERT INTO ordenes_trabajo 
-        (vehiculo_id, descripcion_problema, prioridad) 
-       VALUES ($1, $2, $3) 
+        (cliente_id, vehiculo_id, descripcion_problema, prioridad) 
+       VALUES ($1, $2, $3, $4) 
        RETURNING *`,
-      [vehiculo_id, descripcion_problema, prioridad]
+      [cliente_id, vehiculo_id, descripcion_problema, prioridad]
     );
     return result.rows[0];
   }

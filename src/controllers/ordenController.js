@@ -23,6 +23,12 @@ const createOrden = async (req, res) => {
       data: orden
     });
   } catch (error) {
+    if (error.code === 'VEHICULO_NO_ENCONTRADO') {
+      return res.status(404).json({
+        success: false,
+        message: 'Vehículo no encontrado'
+      });
+    }
     console.error('Error:', error);
     res.status(500).json({
       success: false,

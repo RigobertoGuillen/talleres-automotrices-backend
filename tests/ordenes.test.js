@@ -58,6 +58,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
   afterAll(async () => {
     await pool.query("DELETE FROM ordenes_trabajo WHERE vehiculo_id = $1", [vehiculoId]);
     await pool.query("DELETE FROM vehiculos WHERE placa LIKE 'ORD-%'");
+    await pool.end();
   });
 
   test('POST /api/ordenes - debería crear una orden de trabajo', async () => {
