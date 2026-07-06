@@ -243,7 +243,7 @@ const getHistorialCliente = async (req, res) => {
         d.descripcion_falla,
         d.observaciones AS diagnostico_observaciones
       FROM ordenes_trabajo o
-      INNER JOIN vehiculos v
+      LEFT JOIN vehiculos v
         ON o.vehiculo_id = v.id
       LEFT JOIN usuarios u
         ON o.mecanico_id = u.id

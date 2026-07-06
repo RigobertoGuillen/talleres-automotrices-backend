@@ -85,7 +85,7 @@ CREATE TABLE marcas_vehiculo(
 CREATE TABLE vehiculos(
 	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	placa varchar(15) NOT NULL UNIQUE,
-	marca_id smallint NOT NULL REFERENCES marcas_vehiculo(id),
+	marca varchar(50) NOT NULL,
 	modelo varchar(50) NOT NULL,
 	anio smallint NOT NULL
 		CHECK (anio BETWEEN 1950 AND extract(year FROM now())::int + 1),
@@ -96,13 +96,14 @@ CREATE TABLE vehiculos(
 );
 
 CREATE INDEX vehiculos_clientes_idx ON vehiculos(cliente_id);
-CREATE INDEX vehiculos_marca_idx ON vehiculos(marca_id);
+CREATE INDEX vehiculos_marca_idx ON vehiculos(marca);
 
 /*ORDENES DE TRABAJO E HISTORIAL DE ESTADOS (HU-09, HU-10, HU-11, HU-08)*/
 
 CREATE TABLE ordenes_trabajo(
 	id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	numero_orden varchar(20) UNIQUE,
+	cliente_id bigint NOT NULL REFERENCES clientes(id),
 	vehiculo_id bigint NOT NULL REFERENCES vehiculos(id),
 	mecanico_id bigint REFERENCES usuarios(id),
 	fecha_ingreso date NOT NULL DEFAULT current_date,

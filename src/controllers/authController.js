@@ -10,14 +10,17 @@ const pool = require('../config/db');
 const JWT_SECRET = process.env.JWT_SECRET || 'talleres_automotrices';
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   },
   tls: {
     rejectUnauthorized: false
-  }
+  },
+  family: 4
 });
 
 const login = async (req, res) => {
@@ -116,12 +119,12 @@ const register = async (req, res) => {
     const hash = await bcrypt.hash(contrasena, salt);
 
     const usuario = await Usuario.create({
-      nombre_completo,
-      nombre_usuario,
-      correo,
-      contrasena: hash,
-      rol: rol || 'recepcionista'
-    });
+    nombre_completo,
+    nombre_usuario,
+    correo,
+    contrasena,
+    rol_id: rol_id || 3
+});
 
     res.status(201).json({
       success: true,
