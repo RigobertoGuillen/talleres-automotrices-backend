@@ -1,4 +1,5 @@
 const pool = require('./db');
+const bcrypt = require('bcryptjs');
 
 const setupDatabase = async () => {
   const sql = `
@@ -58,12 +59,21 @@ const setupDatabase = async () => {
         PRIMARY KEY (rol_id, modulo_id)
     );
 
+    CREATE TABLE IF NOT EXISTS direcciones(
+        id SERIAL PRIMARY KEY,
+        calle varchar(255) NOT NULL,
+        colonia varchar(255) NOT NULL,
+        ciudad varchar(100) NOT NULL,
+        departamento varchar(100) NOT NULL,
+        referencia text
+    );
+
     CREATE TABLE IF NOT EXISTS clientes(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         nombre varchar(150) NOT NULL,
         telefono varchar(150) NOT NULL,
         correo varchar(150),
-        direccion varchar(255),
+        direccion varchar(255),  /* Volvemos a la columna original que busca tu modelo */
         fecha_registro timestamptz NOT NULL DEFAULT now(),
         editado_por bigint REFERENCES usuarios(id),
         fecha_edicion timestamptz
@@ -107,7 +117,7 @@ const setupDatabase = async () => {
     CREATE TABLE IF NOT EXISTS diagnosticos(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
-        decripcion_falla text NOT NULL,
+        descripcion_falla text NOT NULL,
         observaciones text,
         recomendaciones text,
         estado estado_diagnostico NOT NULL DEFAULT 'pendiente',
@@ -182,40 +192,66 @@ const setupDatabase = async () => {
         fecha_pago timestamptz NOT NULL DEFAULT now(),
         registrado_por bigint REFERENCES usuarios(id)
     );
+
+    CREATE TABLE IF NOT EXISTS tokens_recuperacion(
+        id SERIAL PRIMARY KEY,
+        email varchar(150) NOT NULL,
+        token varchar(255) NOT NULL,
+        expires_at timestamptz NOT NULL,
+        used boolean NOT NULL DEFAULT false,
+        created_at timestamptz NOT NULL DEFAULT now()
+    );
   `;
 
   try {
-    // 1. Ejecutar la creación de tablas
     await pool.query(sql);
     console.log("Tablas creadas correctamente.");
 
-    // 2. Insertar rol administrador
     await pool.query(`
       INSERT INTO roles (nombre, descripcion) 
       VALUES ('administrador', 'Acceso total al sistema') 
       ON CONFLICT (nombre) DO NOTHING;
     `);
 
-    // 3. Insertar usuario admin (contraseña: admin)
-    // El hash corresponde a 'admin' generado con bcrypt
+    const hash = await bcrypt.hash('admin', 10);
+
     await pool.query(`
       INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
       VALUES (
-        'Administrador', 
-        'admin', 
-        'admin@taller.com', 
-        'TU_NUEVO_HASH_AQUI', 
-        (SELECT id FROM roles WHERE nombre = 'administrador'), 
+        'Administrador',
+        'admin',
+        'admin@taller.com',
+        $1,
+        (SELECT id FROM roles WHERE nombre = 'administrador'),
         true
       )
       ON CONFLICT (nombre_usuario) DO NOTHING;
-    `);
-    
+    `, [hash]);
+
     console.log("Usuario administrador inicializado.");
 
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS marcas_vehiculo(
+        id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        nombre varchar(50) NOT NULL UNIQUE
+      );
+    `);
+
+    await pool.query(`
+      INSERT INTO marcas_vehiculo (nombre) VALUES
+        ('Toyota'), ('Honda'), ('Nissan'), ('Chevrolet'), ('Ford'),
+        ('Hyundai'), ('Kia'), ('Mazda'), ('Mitsubishi'), ('Suzuki'),
+        ('Volkswagen'), ('BMW'), ('Mercedes-Benz'), ('Jeep'), ('Dodge')
+      ON CONFLICT (nombre) DO NOTHING;
+    `);
+
+    console.log("Marcas de vehículos inicializadas.");
+
   } catch (err) {
-    console.error("Error al sincronizar base de datos:", err.message);
-  }
+  console.error("Error completo al sincronizar base de datos:", err);
+  throw err;
+}
 };
 
 module.exports = setupDatabase;

@@ -1,14 +1,25 @@
-const db = require('../config/db'); // Importamos el objeto db centralizado
+const db = require('../config/db'); // Objeto db centralizado
 const bcrypt = require('bcryptjs');
 
 class Usuario {
   static async findByUsername(nombre_usuario) {
-    const result = await db.query( // Usamos db.query en lugar de pool.query
+    const result = await db.query(
       `SELECT u.*, r.nombre AS rol
        FROM usuarios u
        JOIN roles r ON u.rol_id = r.id
        WHERE u.nombre_usuario = $1`,
       [nombre_usuario]
+    );
+    return result.rows[0] || null;
+  }
+
+  static async findByEmail(email) {
+    const result = await db.query(
+      `SELECT u.*, r.nombre AS rol
+       FROM usuarios u
+       JOIN roles r ON u.rol_id = r.id
+       WHERE u.correo = $1`,
+      [email]
     );
     return result.rows[0] || null;
   }
@@ -30,6 +41,7 @@ class Usuario {
     return result.rows;
   }
 
+  // Buscar por ID
   static async findById(id) {
     const result = await db.query(
       `SELECT
@@ -80,6 +92,8 @@ class Usuario {
       contrasena_hash = await bcrypt.hash(contrasena, salt);
     }
 
+    // Si no se envía contraseña nueva, se debería mantener la existente en un entorno real.
+    // Usamos COALESCE para que si contrasena_hash es null, no rompa o limpie el campo.
     const result = await db.query(
       `UPDATE usuarios
        SET nombre_completo = $1,
