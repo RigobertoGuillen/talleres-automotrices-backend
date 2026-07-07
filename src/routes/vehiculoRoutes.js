@@ -8,11 +8,13 @@ const {
     listarVehiculos,
     listarMarcas,
     buscarVehiculos,
-    historialVehiculo
+    historialVehiculo,
+    listarVehiculosPorCliente
 } = require('../controllers/vehiculoController');
 
 router.get('/marcas', listarMarcas);
 router.get('/buscar', buscarVehiculos);
+router.get('/clientes/:id', listarVehiculosPorCliente);
 
 router.post('/', crearVehiculo);
 router.get('/', listarVehiculos);

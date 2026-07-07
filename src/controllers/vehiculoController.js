@@ -185,6 +185,27 @@ const buscarVehiculos = async (req, res) => {
     }
 };
 
+const listarVehiculosPorCliente = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const vehiculos = await Vehiculo.findByCliente(id);
+
+        return res.json({
+            success: true,
+            data: vehiculos
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            success: false,
+            message: 'Error al obtener los vehículos del cliente'
+        });
+    }
+};
+
 const historialVehiculo = async (req, res) => {
     try {
         const { id } = req.params;
@@ -203,5 +224,6 @@ module.exports = {
     listarVehiculos,
     listarMarcas,
     buscarVehiculos,
-    historialVehiculo
+    historialVehiculo,
+    listarVehiculosPorCliente
 };

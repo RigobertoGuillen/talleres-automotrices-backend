@@ -66,6 +66,24 @@ class Vehiculo {
         return result.rows;
     }
 
+    static async findByCliente(clienteId) {
+    const result = await db.query(`
+        SELECT
+            v.id,
+            v.placa,
+            m.nombre AS marca,
+            v.modelo,
+            v.anio
+        FROM vehiculos v
+        INNER JOIN marcas_vehiculo m
+            ON v.marca_id = m.id
+        WHERE v.cliente_id = $1
+        ORDER BY v.placa
+    `, [clienteId]);
+
+    return result.rows;
+}
+
     static async historial(vehiculoId) {
         const result = await db.query(`
             SELECT ot.id, ot.numero_orden, ot.fecha_ingreso, ot.descripcion_problema,
