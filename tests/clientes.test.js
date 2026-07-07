@@ -10,8 +10,8 @@ describe('Clientes Endpoints', () => {
   beforeAll(async () => {
 
     await pool.query(
-      `DELETE FROM clientes WHERE correo = $1`,
-      ['juan@mail.com']
+      `DELETE FROM clientes WHERE dni = $1`,
+      ['0801199988888']
     );
 
     const response = await request(app)
@@ -42,15 +42,26 @@ describe('Clientes Endpoints', () => {
       .post('/api/clientes')
       .set('Authorization', `Bearer ${token}`)
       .send({
-        nombre: 'Juan Carlos Perez Gomez',
+        dni: '0801199988888',
+        primer_nombre: 'Juan',
+        segundo_nombre: 'Carlos',
+        primer_apellido: 'Perez',
+        segundo_apellido: 'Gomez',
         telefono: '9999-9999',
         correo: 'juan@mail.com',
-        direccion: 'Calle Principal'
+        direccion: {
+          calle: 'Calle Principal',
+          colonia: 'El Centro',
+          ciudad: 'Choluteca',
+          departamento: 'Choluteca',
+          referencia: 'Frente al parque'
+        }
       });
 
     expect(response.status).toBe(201);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data.nombre).toBe('Juan Carlos Perez Gomez');
+    expect(response.body.data.primer_nombre).toBe('Juan');
+    expect(response.body.data.primer_apellido).toBe('Perez');
 
     clienteId = response.body.data.id;
 

@@ -1,7 +1,14 @@
 const pool = require('./db');
 const bcrypt = require('bcryptjs');
 
+ 
 const setupDatabase = async () => {
+  
+  if (process.env.NODE_ENV === 'test') {
+    await pool.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
+    console.log('Esquema de pruebas reiniciado desde cero.');
+  }
+ 
   const sql = `
     /* Tipos enumerados */
     DO $$ BEGIN
@@ -24,14 +31,14 @@ const setupDatabase = async () => {
             CREATE TYPE metodo_pago AS ENUM ('efectivo','tarjeta','transferencia');
         END IF;
     END $$;
-
+ 
     /* TABLAS */
     CREATE TABLE IF NOT EXISTS roles(
         id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         nombre rol_nombre NOT NULL UNIQUE,
         descripcion varchar(200)
     );
-
+ 
     CREATE TABLE IF NOT EXISTS usuarios(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         nombre_completo varchar(150) NOT NULL,
@@ -43,13 +50,13 @@ const setupDatabase = async () => {
         fecha_creacion timestamptz NOT NULL DEFAULT now(),
         fecha_actualizacion timestamptz NOT NULL DEFAULT now()
     );
-
+ 
     CREATE TABLE IF NOT EXISTS modulos(
         id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         nombre varchar(50) NOT NULL UNIQUE,
         descripcion varchar(150)
     );
-
+ 
     CREATE TABLE IF NOT EXISTS permisos_rol(
         rol_id smallint NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
         modulo_id smallint NOT NULL REFERENCES modulos(id) ON DELETE CASCADE,
@@ -58,43 +65,67 @@ const setupDatabase = async () => {
         puede_eliminar boolean NOT NULL DEFAULT false,
         PRIMARY KEY (rol_id, modulo_id)
     );
-
+ 
+    /* Direcciones normalizadas (una dirección por cliente, opcional) */
     CREATE TABLE IF NOT EXISTS direcciones(
-        id SERIAL PRIMARY KEY,
-        calle varchar(255) NOT NULL,
-        colonia varchar(255) NOT NULL,
-        ciudad varchar(100) NOT NULL,
-        departamento varchar(100) NOT NULL,
+        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        calle varchar(150) NOT NULL,
+        colonia varchar(100) NOT NULL,
+        ciudad varchar(80) NOT NULL,
+        departamento varchar(80) NOT NULL,
         referencia text
     );
-
+ 
+    /* Clientes: coincide con Cliente.js (dni, primer_nombre, segundo_nombre,
+       primer_apellido, segundo_apellido, direccion_id) */
     CREATE TABLE IF NOT EXISTS clientes(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        nombre varchar(150) NOT NULL,
+        dni varchar(13) NOT NULL UNIQUE CHECK (dni ~ '^[0-9]{13}$'),
+        primer_nombre varchar(150) NOT NULL,
+        segundo_nombre varchar(150) NULL,
+        primer_apellido varchar(150) NOT NULL,
+        segundo_apellido varchar(150) NOT NULL,
         telefono varchar(150) NOT NULL,
         correo varchar(150),
-        direccion varchar(255),  /* Volvemos a la columna original que busca tu modelo */
-        fecha_registro timestamptz NOT NULL DEFAULT now(),
-        editado_por bigint REFERENCES usuarios(id),
-        fecha_edicion timestamptz
+        direccion_id bigint REFERENCES direcciones(id) ON DELETE SET NULL,
+        fecha_registro timestamptz NOT NULL DEFAULT now()
     );
-
+ 
+    CREATE TABLE IF NOT EXISTS auditoria_clientes (
+        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        cliente_id bigint NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+        campo_modificado varchar(50) NOT NULL,
+        valor_anterior text,
+        valor_nuevo text,
+        fecha_hora timestamptz NOT NULL DEFAULT now()
+    );
+ 
+    /* marcas_vehiculo debe existir ANTES de vehiculos, porque
+       vehiculos.marca_id la referencia con FK */
+    CREATE TABLE IF NOT EXISTS marcas_vehiculo(
+        id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        nombre varchar(50) NOT NULL UNIQUE
+    );
+ 
+    /* Vehiculos: coincide con Vehiculo.js (marca_id FK, no columna marca) */
     CREATE TABLE IF NOT EXISTS vehiculos(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         placa varchar(15) NOT NULL UNIQUE,
-        marca varchar(50) NOT NULL,
+        marca_id smallint NOT NULL REFERENCES marcas_vehiculo(id),
         modelo varchar(50) NOT NULL,
-        anio smallint NOT NULL,
+        anio smallint NOT NULL
+            CHECK (anio BETWEEN 1950 AND extract(year FROM now())::int + 1),
         color varchar(30),
         tipo tipo_vehiculo NOT NULL,
         cliente_id bigint NOT NULL REFERENCES clientes(id) ON DELETE RESTRICT,
         fecha_registro timestamptz NOT NULL DEFAULT now()
     );
-
+ 
+    /* Ordenes de trabajo: SIN cliente_id. El cliente siempre se obtiene
+       vía vehiculo_id -> vehiculos.cliente_id (ver OrdenTrabajo.js) */
     CREATE TABLE IF NOT EXISTS ordenes_trabajo(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         numero_orden varchar(20) UNIQUE,
-        cliente_id bigint NOT NULL REFERENCES clientes(id),
         vehiculo_id bigint NOT NULL REFERENCES vehiculos(id),
         mecanico_id bigint REFERENCES usuarios(id),
         fecha_ingreso date NOT NULL DEFAULT current_date,
@@ -104,7 +135,7 @@ const setupDatabase = async () => {
         fecha_creacion timestamptz NOT NULL DEFAULT now(),
         fecha_actualizacion timestamptz NOT NULL DEFAULT now()
     );
-
+ 
     CREATE TABLE IF NOT EXISTS historial_estados_orden(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
@@ -113,7 +144,7 @@ const setupDatabase = async () => {
         usuario_id bigint REFERENCES usuarios(id),
         fecha_hora timestamptz NOT NULL DEFAULT now()
     );
-
+ 
     CREATE TABLE IF NOT EXISTS diagnosticos(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
@@ -125,50 +156,66 @@ const setupDatabase = async () => {
         fecha_registro timestamptz NOT NULL DEFAULT now(),
         fecha_actualizacion timestamptz NOT NULL DEFAULT now()
     );
-
+ 
     CREATE TABLE IF NOT EXISTS categorias_repuestos(
         id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         nombre varchar(50) NOT NULL UNIQUE
     );
-
+ 
     CREATE TABLE IF NOT EXISTS repuestos(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         codigo varchar(30) NOT NULL UNIQUE,
         nombre varchar(150) NOT NULL,
         categoria_id smallint REFERENCES categorias_repuestos(id),
-        cantidad_disponible integer NOT NULL DEFAULT 0,
-        cantidad_minima integer NOT NULL DEFAULT 0,
-        precio_unitario numeric(10,2) NOT NULL,
+        precio_unitario numeric(10,2) NOT NULL CHECK (precio_unitario >= 0),
+        fecha_creacion timestamptz NOT NULL DEFAULT now()
+    );
+ 
+    CREATE TABLE IF NOT EXISTS stock_repuestos(
+        repuesto_id bigint PRIMARY KEY REFERENCES repuestos(id) ON DELETE CASCADE,
+        cantidad_disponible integer NOT NULL DEFAULT 0 CHECK (cantidad_disponible >= 0),
+        cantidad_minima integer NOT NULL DEFAULT 0 CHECK (cantidad_minima >= 0),
         fecha_actualizacion timestamptz NOT NULL DEFAULT now()
     );
-
+ 
+    CREATE TABLE IF NOT EXISTS movimientos_inventario(
+        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        repuesto_id bigint NOT NULL REFERENCES repuestos(id),
+        tipo_movimiento varchar(10) NOT NULL CHECK (tipo_movimiento IN ('entrada','salida')),
+        cantidad integer NOT NULL CHECK (cantidad > 0),
+        motivo varchar(100),
+        orden_id bigint REFERENCES ordenes_trabajo(id),
+        usuario_id bigint REFERENCES usuarios(id),
+        fecha_hora timestamptz NOT NULL DEFAULT now()
+    );
+ 
     CREATE TABLE IF NOT EXISTS solicitudes_repuestos(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
-        repuestos_id bigint NOT NULL REFERENCES repuestos(id),
-        cantidad_solicitada integer NOT NULL,
-        precio_unitario numeric(10,2) NOT NULL,
+        repuesto_id bigint NOT NULL REFERENCES repuestos(id),
+        cantidad_solicitada integer NOT NULL CHECK (cantidad_solicitada > 0),
+        precio_historico numeric(10,2) NOT NULL,
         mecanico_id bigint REFERENCES usuarios(id),
         fecha_solicitud timestamptz NOT NULL DEFAULT now()
     );
-
+ 
     CREATE TABLE IF NOT EXISTS servicio_catalogo(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         nombre varchar(100) NOT NULL UNIQUE,
         descripcion text,
-        precio_base numeric(10,2) NOT NULL DEFAULT 0
+        precio_base numeric(10,2) NOT NULL DEFAULT 0 CHECK (precio_base >= 0)
     );
-
+ 
     CREATE TABLE IF NOT EXISTS orden_servicio(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
         servicio_id bigint NOT NULL REFERENCES servicio_catalogo(id),
-        tiempo_empleado_minutos integer,
+        tiempo_empleado_minutos integer CHECK (tiempo_empleado_minutos >= 0),
         observaciones text,
-        precio_aplicado numeric(10,2) NOT NULL,
+        precio_aplicado numeric(10,2) NOT NULL CHECK (precio_aplicado >= 0),
         fecha_registro timestamptz NOT NULL DEFAULT now()
     );
-
+ 
     CREATE TABLE IF NOT EXISTS facturas(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         numero_factura varchar(20) UNIQUE,
@@ -183,7 +230,7 @@ const setupDatabase = async () => {
         metodo_pago metodo_pago,
         recordatorio_enviado boolean NOT NULL DEFAULT false
     );
-
+ 
     CREATE TABLE IF NOT EXISTS pagos(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         factura_id bigint NOT NULL REFERENCES facturas(id) ON DELETE CASCADE,
@@ -192,7 +239,7 @@ const setupDatabase = async () => {
         fecha_pago timestamptz NOT NULL DEFAULT now(),
         registrado_por bigint REFERENCES usuarios(id)
     );
-
+ 
     CREATE TABLE IF NOT EXISTS tokens_recuperacion(
         id SERIAL PRIMARY KEY,
         email varchar(150) NOT NULL,
@@ -202,19 +249,19 @@ const setupDatabase = async () => {
         created_at timestamptz NOT NULL DEFAULT now()
     );
   `;
-
+ 
   try {
     await pool.query(sql);
     console.log("Tablas creadas correctamente.");
-
+ 
     await pool.query(`
       INSERT INTO roles (nombre, descripcion) 
       VALUES ('administrador', 'Acceso total al sistema') 
       ON CONFLICT (nombre) DO NOTHING;
     `);
-
+ 
     const hash = await bcrypt.hash('admin', 10);
-
+ 
     await pool.query(`
       INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
       VALUES (
@@ -227,17 +274,9 @@ const setupDatabase = async () => {
       )
       ON CONFLICT (nombre_usuario) DO NOTHING;
     `, [hash]);
-
+ 
     console.log("Usuario administrador inicializado.");
-
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS marcas_vehiculo(
-        id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        nombre varchar(50) NOT NULL UNIQUE
-      );
-    `);
-
+ 
     await pool.query(`
       INSERT INTO marcas_vehiculo (nombre) VALUES
         ('Toyota'), ('Honda'), ('Nissan'), ('Chevrolet'), ('Ford'),
@@ -245,13 +284,13 @@ const setupDatabase = async () => {
         ('Volkswagen'), ('BMW'), ('Mercedes-Benz'), ('Jeep'), ('Dodge')
       ON CONFLICT (nombre) DO NOTHING;
     `);
-
+ 
     console.log("Marcas de vehículos inicializadas.");
-
+ 
   } catch (err) {
-  console.error("Error completo al sincronizar base de datos:", err);
-  throw err;
-}
+    console.error("Error completo al sincronizar base de datos:", err);
+    throw err;
+  }
 };
-
+ 
 module.exports = setupDatabase;
