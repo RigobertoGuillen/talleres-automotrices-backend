@@ -7,6 +7,8 @@ describe('Auth Endpoints', () => {
   beforeAll(async () => {
   try {
     const contrasenaHash = await bcrypt.hash('admin123', 10);
+
+    await pool.query("DELETE FROM historial_estados_orden");
     
     await db.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
     

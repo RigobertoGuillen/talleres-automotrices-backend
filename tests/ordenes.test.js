@@ -66,6 +66,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
     // ON DELETE CASCADE sobre ordenes_trabajo, así que se limpian solos.
     // movimientos_inventario NO tiene cascade, pero esta suite no genera
     // movimientos de inventario, así que el DELETE de abajo es seguro.
+    await pool.query("DELETE FROM movimientos_inventario");
     await pool.query("DELETE FROM ordenes_trabajo WHERE vehiculo_id = $1", [vehiculoId]);
     await pool.query("DELETE FROM vehiculos WHERE placa LIKE 'ORD-%'");
     await pool.end();
