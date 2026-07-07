@@ -1,0 +1,127 @@
+====================================================================
+REPORTE DE CIERRE DE SPRINT - SPRINT 1
+====================================================================
+
+Periodo: 21 de junio al 5 de julio
+Proyecto: Sistema de Gestión de Taller Automotriz
+
+--------------------------------------------------------------------
+1. SPRINT REVIEW (REVISIÓN DEL SPRINT)
+--------------------------------------------------------------------
+
+Métricas de Velocidad del Equipo:
+- Puntos de Historia Comprometidos/Planificados: 99 SP 
+- Puntos de Historia Completados con Éxito: 67 SP
+- Puntos de Historia No Completados (En Progreso/Bloqueados): 32 SP
+- Porcentaje de Cumplimiento: 67.68%
+
+Funcionalidades Entregadas (Completadas al 100%):
+• Gestión de Clientes:
+  - HU-06: Registro de clientes (5 SP)
+  - HU-07: Editar cliente (3 SP)
+  - HU-08: Buscar cliente (1 SP)
+  - HU-09: Consultar historial de cliente (8 SP)
+  - HU-10: Eliminar cliente (3 SP)
+• Gestión de Vehículos:
+  - HU-11: Registrar vehículo (5 SP)
+  - HU-13: Actualizar vehículo (3 SP)
+  - HU-14: Historial de vehículo (5 SP)
+  - HU-15: Buscar vehículo (3 SP)
+• Gestión de Diagnósticos:
+  - HU-16: Registrar diagnóstico (5 SP)
+  - HU-17: Registrar observaciones técnicas (3 SP)
+  - HU-18: Actualizar estado diagnóstico (3 SP)
+  - HU-19: Consultar diagnósticos (5 SP)
+• Asignación y Control Operativo:
+  - HU-22: Asignar mecánico (5 SP)
+  - HU-27: Ver detalle de orden (5 SP)
+  - HU-28: Reasignar orden (5 SP)
+
+Funcionalidades No Entregadas / Casi Completas (Bloqueadas por problemas de enrutamiento):
+Las siguientes tareas tienen la lógica de negocio avanzada pero quedaron pendientes de despliegue/integración debido a fallos con las rutas del backend/frontend:
+  - HU-20: Adjuntar evidencias fotográficas (8 SP)
+  - HU-21: Crear orden de trabajo (8 SP)
+  - HU-23: Consultar órdenes asignadas (3 SP)
+  - HU-24: Actualizar estado reparación (3 SP)
+  - HU-25: Cerrar orden de trabajo (5 SP)
+  - HU-26: Consultar órdenes por estado (5 SP)
+
+
+
+--------------------------------------------------------------------
+2. SPRINT RETROSPECTIVE (RETROSPECTIVA)
+--------------------------------------------------------------------
+
+¿Qué hicimos bien? (Madurez del equipo):
+1. Alto enfoque en los módulos core: Se consolidó de forma excelente el CRUD y ciclo de vida de Clientes, Vehículos y Diagnósticos, sentando bases sólidas para el sistema.
+2. Gran capacidad de estimación inicial: Se abarcó un volumen ambicioso de requerimientos con un desglose claro de pesos en tallas (XS a L) alineados con la escala Fibonacci.
+3. Desacoplamiento efectivo: El avance paralelo de las funcionalidades demuestra buena arquitectura inicial.
+
+¿Qué podemos mejorar? / Problemas detectados:
+1. Gestión de Rutas y Navegación: El principal cuello de botella ocurrió en la definición y comunicación de las rutas del sistema (API/Frontend Router), bloqueando la entrega final de 6 historias críticas vinculadas a las órdenes de trabajo.
+2. Criterios de Aceptación y Pruebas Tempranas: Los problemas de rutas debieron detectarse antes en el ciclo mediante pruebas de integración tempranas en lugar de acumularse al cierre del sprint.
+
+Acciones de Mejora para el Sprint 2:
+1. Sesión de Refactorización de Rutas: Dedicar las primeras horas del Sprint 2 a resolver de manera definitiva la arquitectura de enrutamiento para desbloquear las HU-20, HU-21, HU-23, HU-24, HU-25 y HU-26.
+2. Implementar Mocking o Contratos de API Claros: Definir los endpoints antes de codificar la interfaz para asegurar que el enrutamiento no sea un stopper.
+
+Principios SOLID:
+S-Cada clase tiene una sola responsabilidad.
+Usuario.js solo maneja usuarios, Cliente.js solo maneja clientes.
+
+O- Abierto/Cerrado
+Class abiertas para extensión, cerradas para modificación.
+Los modelos heredan de pool y pueden extenderse sin modificar la clase base.
+
+L-Sustitución de Liskov:
+Las subclases pueden sustituir a sus clases base.
+Los controladores usan req y res de Express de manera consistente.
+
+I - Segregación de Interfaces:
+Interfaces específicas en lugar de una general.
+verificarToken y verificarRol son middlewares separados.
+
+D - Inversión de Dependencias:
+Depender de abstracciones, no de concretas.
+Los modelos dependen de pool (abstracción de base de datos).
+
+Patrones Creacionales
+
+Patron Singleton
+Propósito: Asegurar que solo exista una instancia de una clase.
+javascript
+// src/config/db.js - Única instancia del pool
+const pool = new Pool({ ... });
+module.exports = pool; // ← Solo una instancia en toda la app
+
+
+Patrones Estructurales
+
+Patrón DTO (Data Transfer Object):
+Propósito: se usa para transportar datos entre diferentes capas de una aplicación, sin exponer la lógica interna o la estructura completa de los objetos.
+El frontend solo recibe lo que necesita, sin datos sensibles.
+
+// controllers/authController.js
+res.json({
+  success: true,
+  token,
+  usuario: {
+    id: usuario.id,
+    nombre_completo: usuario.nombre_completo,
+    nombre_usuario: usuario.nombre_usuario,
+    correo: usuario.correo,
+    rol: usuario.rol
+  }
+});
+Patrones de Comportamiento
+Middleware (Variante de Chain of Responsibility)
+Propósito: Procesar peticiones antes de que lleguen al controlador.
+Separa la autenticación de la lógica de negocio.
+javascript
+// middlewares/auth.js
+const verificarToken = (req, res, next) => {
+  // Procesa el token
+  if (!token) return res.status(401).json(...);
+  // Si pasa, llama a next() para continuar
+  next();
+};
