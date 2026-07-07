@@ -14,7 +14,7 @@ const {
 
 router.get('/marcas', listarMarcas);
 router.get('/buscar', buscarVehiculos);
-router.get('/clientes/:id', listarVehiculosPorCliente);
+router.get('/cliente/:id', listarVehiculosPorCliente);
 
 router.post('/', crearVehiculo);
 router.get('/', listarVehiculos);
