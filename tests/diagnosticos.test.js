@@ -27,17 +27,46 @@ describe('Diagnosticos Endpoints', () => {
       );
     }
 
-    await pool.query(
-      `DELETE FROM ordenes_trabajo WHERE vehiculo_id IN (SELECT id FROM vehiculos WHERE placa = $1)`,
-      ['DIAG-001']
-    );
-    await pool.query(`DELETE FROM vehiculos WHERE placa = $1`, ['DIAG-001']);
-    await pool.query(`DELETE FROM clientes WHERE nombre = $1`, ['Cliente Diagnostico Test']);
+   await pool.query(
+  `DELETE FROM ordenes_trabajo
+   WHERE vehiculo_id IN (
+      SELECT id FROM vehiculos WHERE placa = $1
+   )`,
+  ['DIAG-001']
+);
 
-    const cliente = await pool.query(
-      `INSERT INTO clientes (nombre, telefono) VALUES ($1, $2) RETURNING id`,
-      ['Cliente Diagnostico Test', '9999-0000']
-    );
+await pool.query(
+  `DELETE FROM vehiculos WHERE placa = $1`,
+  ['DIAG-001']
+);
+
+await pool.query(
+  `DELETE FROM clientes WHERE dni = $1`,
+  ['0801199912345']
+);
+
+const cliente = await pool.query(
+  `INSERT INTO clientes (
+      dni,
+      primer_nombre,
+      segundo_nombre,
+      primer_apellido,
+      segundo_apellido,
+      telefono,
+      correo
+   )
+   VALUES ($1,$2,$3,$4,$5,$6,$7)
+   RETURNING id`,
+  [
+    '0801199912345',
+    'Cliente',
+    '',
+    'Diagnostico',
+    'Test',
+    '9999-0000',
+    'cliente.test@gmail.com'
+  ]
+);
 
     const marca = await pool.query(`SELECT id FROM marcas_vehiculo LIMIT 1`);
 
