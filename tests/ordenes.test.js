@@ -34,28 +34,39 @@ describe('Ordenes de Trabajo Endpoints', () => {
       let clienteId = clienteResult.rows[0]?.id;
 
       if (!clienteId) {
-        // La tabla clientes solo tiene id (autogenerado), nombre y telefono
-        // como campos obligatorios. No se inserta id manualmente porque es
-        // GENERATED ALWAYS AS IDENTITY.
+        // Esquema normalizado: dni, primer_nombre, primer_apellido y
+        // segundo_apellido son NOT NULL. id se autogenera (IDENTITY).
         const newCliente = await pool.query(
-          `INSERT INTO clientes (nombre, telefono) 
-           VALUES ('Cliente Prueba Ordenes', '8888-8888') 
+          `INSERT INTO clientes (dni, primer_nombre, primer_apellido, segundo_apellido, telefono)
+           VALUES ('0801199912345', 'Cliente', 'Prueba', 'Ordenes', '8888-8888')
            RETURNING id`
         );
         clienteId = newCliente.rows[0].id;
       }
 
+      // vehiculos.marca_id es FK a marcas_vehiculo, ya no existe columna
+      // de texto "marca". Buscamos un id real de marca.
+      const marcaResult = await pool.query(
+        "SELECT id FROM marcas_vehiculo WHERE nombre = 'Toyota' LIMIT 1"
+      );
+      const marcaId = marcaResult.rows[0].id;
+
       const newVehiculo = await pool.query(
-        `INSERT INTO vehiculos (placa, marca, modelo, anio, color, tipo, cliente_id) 
-         VALUES ('ORD-999', 'Toyota', 'Prueba', 2020, 'Blanco', 'turismo', $1) 
+        `INSERT INTO vehiculos (placa, marca_id, modelo, anio, color, tipo, cliente_id)
+         VALUES ('ORD-999', $1, 'Prueba', 2020, 'Blanco', 'turismo', $2)
          RETURNING id`,
-        [clienteId]
+        [marcaId, clienteId]
       );
       vehiculoId = newVehiculo.rows[0].id;
     }
   });
 
   afterAll(async () => {
+    // historial_estados_orden, diagnosticos y orden_servicio tienen
+    // ON DELETE CASCADE sobre ordenes_trabajo, así que se limpian solos.
+    // movimientos_inventario NO tiene cascade, pero esta suite no genera
+    // movimientos de inventario, así que el DELETE de abajo es seguro.
+    await pool.query("DELETE FROM movimientos_inventario");
     await pool.query("DELETE FROM ordenes_trabajo WHERE vehiculo_id = $1", [vehiculoId]);
     await pool.query("DELETE FROM vehiculos WHERE placa LIKE 'ORD-%'");
     await pool.end();
