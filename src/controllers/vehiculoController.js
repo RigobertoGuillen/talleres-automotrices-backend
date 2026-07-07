@@ -11,7 +11,7 @@ const crearVehiculo = async (req, res) => {
 
         const {
             placa,
-            marca,
+            marca_id,
             modelo,
             anio,
             color,
@@ -19,7 +19,7 @@ const crearVehiculo = async (req, res) => {
             cliente_id
         } = req.body;
 
-        if (!placa || !marca || !modelo || !anio || !tipo || !cliente_id) {
+        if (!placa || !marca_id || !modelo || !anio || !tipo || !cliente_id) {
             return res.status(400).json({
                 success: false,
                 message: 'Todos los campos obligatorios deben enviarse'
@@ -53,7 +53,7 @@ const crearVehiculo = async (req, res) => {
 
         const vehiculo = await Vehiculo.create({
     placa,
-    marca,
+    marca_id,
     modelo,
     anio,
     color,
