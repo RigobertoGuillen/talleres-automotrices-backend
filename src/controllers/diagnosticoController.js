@@ -1,3 +1,4 @@
+// prueba1
 const Diagnostico = require('../models/Diagnostico');
 
 const ESTADOS_VALIDOS = ['pendiente', 'en proceso', 'completado'];
