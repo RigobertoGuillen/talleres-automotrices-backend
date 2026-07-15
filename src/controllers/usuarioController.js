@@ -64,11 +64,11 @@ const updateUsuario = async (req, res) => {
     }
 
     const updated = await Usuario.update(id, {
-      nombre_completo: nombre_completo || usuario.nombre_completo,
-      correo: correo || usuario.correo,
-      contrasena: contrasena || usuario.contrasena_hash,
-      rol_id: rol_id || usuario.rol_id
-    });
+  nombre_completo: nombre_completo || usuario.nombre_completo,
+  correo: correo || usuario.correo,
+  contrasena,
+  rol_id: rol_id || usuario.rol_id
+});
 
     res.json({
       success: true,

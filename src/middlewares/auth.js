@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = 'talleres_automotrices';
+const JWT_SECRET = require('../config/jwt');
 
 const verificarToken = (req, res, next) => {
   try {
