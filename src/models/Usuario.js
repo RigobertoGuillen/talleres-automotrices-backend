@@ -13,11 +13,23 @@ class Usuario {
     return result.rows[0] || null;
   }
 
+  static async findByEmail(email) {
+    const result = await db.query(
+      `SELECT u.*, r.nombre AS rol
+       FROM usuarios u
+       JOIN roles r ON u.rol_id = r.id
+       WHERE u.correo = $1`,
+      [email]
+    );
+    return result.rows[0] || null;
+  }
+
   static async findAll() {
     const result = await db.query(QUERIES.FIND_ALL);
     return result.rows;
   }
 
+  // Buscar por ID
   static async findById(id) {
     const result = await db.query(QUERIES.FIND_BY_ID, [id]);
     return result.rows[0] || null;
