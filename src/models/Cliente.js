@@ -1,65 +1,31 @@
-const pool = require('../config/db');
+const db = require('../config/db');
+const QUERIES = require('../constants/queries/clienteQueries');
 
 class Cliente {
   static async findAll() {
-    const result = await pool.query(
-      `SELECT c.*, 
-        d.calle, d.colonia, d.ciudad, d.departamento, d.referencia,
-        (SELECT COUNT(*) FROM vehiculos v WHERE v.cliente_id = c.id) as total_vehiculos
-       FROM clientes c
-       LEFT JOIN direcciones d ON c.direccion_id = d.id
-       ORDER BY c.id`
-    );
+    const result = await db.query(QUERIES.FIND_ALL);
     return result.rows;
   }
 
   static async findById(id) {
-    const result = await pool.query(
-      `SELECT c.*, 
-        d.calle, d.colonia, d.ciudad, d.departamento, d.referencia,
-        (SELECT json_agg(v.*) FROM vehiculos v WHERE v.cliente_id = c.id) as vehiculos
-       FROM clientes c
-       LEFT JOIN direcciones d ON c.direccion_id = d.id
-       WHERE c.id = $1`,
-      [id]
-    );
+    const result = await db.query(QUERIES.FIND_BY_ID, [id]);
     return result.rows[0] || null;
   }
 
   static async findByDni(dni) {
-    const result = await pool.query(
-      `SELECT c.*, 
-        d.calle, d.colonia, d.ciudad, d.departamento, d.referencia
-       FROM clientes c
-       LEFT JOIN direcciones d ON c.direccion_id = d.id
-       WHERE c.dni = $1`,
-      [dni]
-    );
+    const result = await db.query(QUERIES.FIND_BY_DNI, [dni]);
     return result.rows[0] || null;
   }
 
   static async findByNombre(nombre) {
-    const result = await pool.query(
-      `SELECT c.*, 
-        d.calle, d.colonia, d.ciudad, d.departamento, d.referencia
-       FROM clientes c
-       LEFT JOIN direcciones d ON c.direccion_id = d.id
-       WHERE c.primer_nombre ILIKE $1 
-          OR c.primer_apellido ILIKE $1
-          OR CONCAT(c.primer_nombre, ' ', c.primer_apellido) ILIKE $1
-       ORDER BY c.id`,
-      [`%${nombre}%`]
-    );
+    const result = await db.query(QUERIES.FIND_BY_NOMBRE, [`%${nombre}%`]);
     return result.rows;
   }
 
   static async createDireccion({ calle, colonia, ciudad, departamento, referencia }) {
-    const result = await pool.query(
-      `INSERT INTO direcciones (calle, colonia, ciudad, departamento, referencia) 
-       VALUES ($1, $2, $3, $4, $5) 
-       RETURNING id`,
-      [calle, colonia, ciudad, departamento, referencia || null]
-    );
+    const result = await db.query(QUERIES.CREATE_DIRECCION, [
+      calle, colonia, ciudad, departamento, referencia || null
+    ]);
     return result.rows[0].id;
   }
 
@@ -69,13 +35,10 @@ class Cliente {
       direccionId = await this.createDireccion(direccion);
     }
 
-    const result = await pool.query(
-      `INSERT INTO clientes 
-        (dni, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, telefono, correo, direccion_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-       RETURNING *`,
-      [dni, primer_nombre, segundo_nombre || null, primer_apellido, segundo_apellido, telefono, correo || null, direccionId]
-    );
+    const result = await db.query(QUERIES.CREATE, [
+      dni, primer_nombre, segundo_nombre || null, primer_apellido, 
+      segundo_apellido, telefono, correo || null, direccionId
+    ]);
     return result.rows[0];
   }
 
@@ -85,72 +48,65 @@ class Cliente {
 
     if (data.direccion) {
       if (cliente.direccion_id) {
-        await pool.query(
-          `UPDATE direcciones 
-           SET calle = $1, colonia = $2, ciudad = $3, departamento = $4, referencia = $5
-           WHERE id = $6`,
-          [data.direccion.calle, data.direccion.colonia, data.direccion.ciudad, 
-           data.direccion.departamento, data.direccion.referencia || null, cliente.direccion_id]
-        );
+        await db.query(QUERIES.UPDATE_DIRECCION, [
+          data.direccion.calle, data.direccion.colonia, data.direccion.ciudad,
+          data.direccion.departamento, data.direccion.referencia || null, cliente.direccion_id
+        ]);
       } else {
         const direccionId = await this.createDireccion(data.direccion);
         data.direccion_id = direccionId;
       }
     }
 
-    const fields = [];
-    const values = [];
-    let index = 1;
-
-    if (data.dni) { fields.push(`dni = $${index++}`); values.push(data.dni); }
-    if (data.primer_nombre) { fields.push(`primer_nombre = $${index++}`); values.push(data.primer_nombre); }
-    if (data.segundo_nombre !== undefined) { fields.push(`segundo_nombre = $${index++}`); values.push(data.segundo_nombre); }
-    if (data.primer_apellido) { fields.push(`primer_apellido = $${index++}`); values.push(data.primer_apellido); }
-    if (data.segundo_apellido) { fields.push(`segundo_apellido = $${index++}`); values.push(data.segundo_apellido); }
-    if (data.telefono) { fields.push(`telefono = $${index++}`); values.push(data.telefono); }
-    if (data.correo !== undefined) { fields.push(`correo = $${index++}`); values.push(data.correo); }
-    if (data.direccion_id) { fields.push(`direccion_id = $${index++}`); values.push(data.direccion_id); }
-
-    values.push(id);
-
-    const result = await pool.query(
-      `UPDATE clientes SET ${fields.join(', ')} 
-       WHERE id = $${index} 
-       RETURNING *`,
-      values
-    );
+    const result = await db.query(QUERIES.UPDATE, [
+      data.dni || null,
+      data.primer_nombre || null,
+      data.segundo_nombre !== undefined ? data.segundo_nombre : null,
+      data.primer_apellido || null,
+      data.segundo_apellido || null,
+      data.telefono || null,
+      data.correo !== undefined ? data.correo : null,
+      data.direccion_id || null,
+      id
+    ]);
     return result.rows[0] || null;
   }
 
   static async registrarAuditoria({ cliente_id, campo_modificado, valor_anterior, valor_nuevo }) {
-    const result = await pool.query(
-      `INSERT INTO auditoria_clientes (cliente_id, campo_modificado, valor_anterior, valor_nuevo) 
-       VALUES ($1, $2, $3, $4) 
-       RETURNING *`,
-      [cliente_id, campo_modificado, valor_anterior, valor_nuevo]
-    );
+    const result = await db.query(QUERIES.REGISTRAR_AUDITORIA, [
+      cliente_id, campo_modificado, valor_anterior, valor_nuevo
+    ]);
     return result.rows[0];
   }
 
   static async delete(id) {
-    const checkResult = await pool.query(
-      `SELECT COUNT(*) FROM vehiculos v 
-       WHERE v.cliente_id = $1 AND EXISTS (
-         SELECT 1 FROM ordenes_trabajo o WHERE o.vehiculo_id = v.id
-       )`,
-      [id]
-    );
-    
+    const checkResult = await db.query(QUERIES.CHECK_ORDENES, [id]);
     const tieneOrdenes = parseInt(checkResult.rows[0].count) > 0;
     if (tieneOrdenes) {
-      throw new Error('No se puede eliminar un cliente con ordenes de trabajo asociadas');
+      throw new Error('No se puede eliminar un cliente con órdenes de trabajo asociadas');
     }
 
-    const result = await pool.query(
-      'DELETE FROM clientes WHERE id = $1 RETURNING id',
-      [id]
-    );
+    const result = await db.query(QUERIES.DELETE, [id]);
     return result.rows[0] || null;
+  }
+
+  static async getHistorial(id, fecha_inicio, fecha_fin) {
+    let query = QUERIES.GET_HISTORIAL_BASE;
+    const params = [id];
+    let index = 2;
+
+    if (fecha_inicio) {
+      query += ` AND o.fecha_ingreso >= $${index++}`;
+      params.push(fecha_inicio);
+    }
+    if (fecha_fin) {
+      query += ` AND o.fecha_ingreso <= $${index++}`;
+      params.push(fecha_fin);
+    }
+
+    query += ` ORDER BY o.fecha_ingreso DESC`;
+    const result = await db.query(query, params);
+    return result.rows;
   }
 }
 

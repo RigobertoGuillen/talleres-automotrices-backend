@@ -12,7 +12,6 @@ const diagnosticoRoutes = require('./routes/diagnosticoRoutes');
 
 const app = express();
 
-
 app.use(cors());
 app.use(express.json());
 

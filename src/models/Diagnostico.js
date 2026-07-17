@@ -1,155 +1,95 @@
 const db = require('../config/db');
+const QUERIES = require('../constants/queries/diagnosticoQueries');
 
 class Diagnostico {
+  static async ordenExiste(ordenId) {
+    const result = await db.query(QUERIES.CHECK_ORDEN, [ordenId]);
+    return !!result.rows[0];
+  }
 
-    static async ordenExiste(ordenId) {
-        const result = await db.query(
-            'SELECT id FROM ordenes_trabajo WHERE id = $1',
-            [ordenId]
-        );
-        return !!result.rows[0];
+  static async findAll({ estado, q, orden_id, orden = 'desc' } = {}) {
+    let query = QUERIES.FIND_ALL;
+    const condiciones = [];
+    const values = [];
+    let index = 1;
+
+    if (estado) {
+      condiciones.push(`d.estado = $${index++}`);
+      values.push(estado);
+    }
+    if (orden_id) {
+      condiciones.push(`d.orden_id = $${index++}`);
+      values.push(orden_id);
+    }
+    if (q) {
+      condiciones.push(`(
+        d.descripcion_falla ILIKE $${index}
+        OR d.observaciones ILIKE $${index}
+        OR d.recomendaciones ILIKE $${index}
+      )`);
+      values.push(`%${q}%`);
+      index++;
     }
 
-    static async findAll({ estado, q, orden_id, orden = 'desc' } = {}) {
-        const condiciones = [];
-        const values = [];
-        let index = 1;
+    const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
+    const direccion = orden.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
-        if (estado) {
-            condiciones.push(`d.estado = $${index++}`);
-            values.push(estado);
-        }
+    query = `${query} ${where} ORDER BY d.fecha_registro ${direccion}`;
+    const result = await db.query(query, values);
+    return result.rows;
+  }
 
-        if (orden_id) {
-            condiciones.push(`d.orden_id = $${index++}`);
-            values.push(orden_id);
-        }
+  static async findById(id) {
+    const result = await db.query(QUERIES.FIND_BY_ID, [id]);
+    return result.rows[0] || null;
+  }
 
-        if (q) {
-            condiciones.push(`(
-                d.descripcion_falla ILIKE $${index}
-                OR d.observaciones ILIKE $${index}
-                OR d.recomendaciones ILIKE $${index}
-            )`);
-            values.push(`%${q}%`);
-            index++;
-        }
+  static async findByOrden(ordenId) {
+    const result = await db.query(QUERIES.FIND_BY_ORDEN, [ordenId]);
+    return result.rows;
+  }
 
-        const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
-        const direccion = orden.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+  static async create({ orden_id, descripcion_falla, observaciones, recomendaciones, estado, mecanico_id }) {
+    const result = await db.query(QUERIES.CREATE, [
+      orden_id,
+      descripcion_falla,
+      observaciones || null,
+      recomendaciones || null,
+      estado || null,
+      mecanico_id || null
+    ]);
+    return result.rows[0];
+  }
 
-        const result = await db.query(`
-            SELECT
-                d.*,
-                u.nombre_completo AS mecanico
-            FROM diagnosticos d
-            LEFT JOIN usuarios u ON d.mecanico_id = u.id
-            ${where}
-            ORDER BY d.fecha_registro ${direccion}
-        `, values);
+  static async update(id, data) {
+    // 1. Buscamos primero el diagnóstico actual para no perder los datos obligatorios
+    const diagnosticoActual = await this.findById(id);
+    if (!diagnosticoActual) return null;
 
-        return result.rows;
-    }
+    // 2. Extraemos los datos recibidos o mantenemos los actuales si vienen vacíos
+    const descripcion_falla = data.descripcion_falla !== undefined ? data.descripcion_falla : diagnosticoActual.descripcion_falla;
+    const recomendaciones = data.recomendaciones !== undefined ? data.recomendaciones : diagnosticoActual.recomendaciones;
+    const observaciones = data.observaciones !== undefined ? data.observaciones : diagnosticoActual.observaciones;
 
-    static async findById(id) {
-        const result = await db.query(`
-            SELECT
-                d.*,
-                u.nombre_completo AS mecanico
-            FROM diagnosticos d
-            LEFT JOIN usuarios u ON d.mecanico_id = u.id
-            WHERE d.id = $1
-        `, [id]);
+    // 3. Enviamos los datos seguros a la query
+    const result = await db.query(QUERIES.UPDATE, [
+      descripcion_falla,
+      recomendaciones,
+      observaciones,
+      id
+    ]);
+    return result.rows[0] || null;
+  }
 
-        return result.rows[0] || null;
-    }
+  static async updateObservaciones(id, observaciones) {
+    const result = await db.query(QUERIES.UPDATE_OBSERVACIONES, [observaciones, id]);
+    return result.rows[0] || null;
+  }
 
-    static async findByOrden(ordenId) {
-        const result = await db.query(`
-            SELECT
-                d.*,
-                u.nombre_completo AS mecanico
-            FROM diagnosticos d
-            LEFT JOIN usuarios u ON d.mecanico_id = u.id
-            WHERE d.orden_id = $1
-            ORDER BY d.fecha_registro DESC
-        `, [ordenId]);
-
-        return result.rows;
-    }
-
-    static async create({ orden_id, descripcion_falla, observaciones, recomendaciones, estado, mecanico_id }) {
-        const result = await db.query(`
-            INSERT INTO diagnosticos
-                (orden_id, descripcion_falla, observaciones, recomendaciones, estado, mecanico_id)
-            VALUES ($1, $2, $3, $4, COALESCE($5::estado_diagnostico, 'pendiente'), $6)
-            RETURNING *
-        `, [
-            orden_id,
-            descripcion_falla,
-            observaciones || null,
-            recomendaciones || null,
-            estado || null,
-            mecanico_id || null
-        ]);
-
-        return result.rows[0];
-    }
-
-    static async update(id, data) {
-        const fields = [];
-        const values = [];
-        let index = 1;
-
-        if (data.descripcion_falla !== undefined) {
-            fields.push(`descripcion_falla = $${index++}`);
-            values.push(data.descripcion_falla);
-        }
-        if (data.recomendaciones !== undefined) {
-            fields.push(`recomendaciones = $${index++}`);
-            values.push(data.recomendaciones);
-        }
-        if (data.observaciones !== undefined) {
-            fields.push(`observaciones = $${index++}`);
-            values.push(data.observaciones);
-        }
-
-        if (fields.length === 0) return await this.findById(id);
-
-        fields.push('fecha_actualizacion = now()');
-        values.push(id);
-
-        const result = await db.query(`
-            UPDATE diagnosticos
-            SET ${fields.join(', ')}
-            WHERE id = $${index}
-            RETURNING *
-        `, values);
-
-        return result.rows[0] || null;
-    }
-
-    static async updateObservaciones(id, observaciones) {
-        const result = await db.query(`
-            UPDATE diagnosticos
-            SET observaciones = $1, fecha_actualizacion = now()
-            WHERE id = $2
-            RETURNING *
-        `, [observaciones, id]);
-
-        return result.rows[0] || null;
-    }
-
-    static async updateEstado(id, estado) {
-        const result = await db.query(`
-            UPDATE diagnosticos
-            SET estado = $1, fecha_actualizacion = now()
-            WHERE id = $2
-            RETURNING *
-        `, [estado, id]);
-
-        return result.rows[0] || null;
-    }
+  static async updateEstado(id, estado) {
+    const result = await db.query(QUERIES.UPDATE_ESTADO, [estado, id]);
+    return result.rows[0] || null;
+  }
 }
 
 module.exports = Diagnostico;
