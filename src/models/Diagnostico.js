@@ -62,7 +62,16 @@ class Diagnostico {
   }
 
   static async update(id, data) {
-    const { descripcion_falla, recomendaciones, observaciones } = data;
+    // 1. Buscamos primero el diagnóstico actual para no perder los datos obligatorios
+    const diagnosticoActual = await this.findById(id);
+    if (!diagnosticoActual) return null;
+
+    // 2. Extraemos los datos recibidos o mantenemos los actuales si vienen vacíos
+    const descripcion_falla = data.descripcion_falla !== undefined ? data.descripcion_falla : diagnosticoActual.descripcion_falla;
+    const recomendaciones = data.recomendaciones !== undefined ? data.recomendaciones : diagnosticoActual.recomendaciones;
+    const observaciones = data.observaciones !== undefined ? data.observaciones : diagnosticoActual.observaciones;
+
+    // 3. Enviamos los datos seguros a la query
     const result = await db.query(QUERIES.UPDATE, [
       descripcion_falla,
       recomendaciones,

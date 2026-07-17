@@ -9,7 +9,7 @@ describe('Auth Endpoints', () => {
     const contrasenaHash = await bcrypt.hash('admin123', 10);
 
     await db.query("DELETE FROM historial_estados_orden");
-    
+    await db.query("DELETE FROM diagnosticos");
     await db.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
     
     // Añadimos OVERRIDING SYSTEM VALUE
