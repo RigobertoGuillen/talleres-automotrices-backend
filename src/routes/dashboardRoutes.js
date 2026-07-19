@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db'); // Ajusta la ruta a tu pool de conexión de pg/PostgreSQL
+const db = require('../config/db'); // Ajusta la ruta a tu pool de conexión de pg/PostgreSQL
 
 router.get('/stats', async (req, res) => {
   try {
