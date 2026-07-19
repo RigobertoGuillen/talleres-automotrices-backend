@@ -8,6 +8,7 @@ const clienteRoutes = require('./routes/clienteRoutes');
 const ordenRoutes = require('./routes/ordenRoutes');
 const vehiculoRoutes = require('./routes/vehiculoRoutes');
 const diagnosticoRoutes = require('./routes/diagnosticoRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 
 const app = express();
@@ -22,6 +23,7 @@ app.use('/api/clientes', clienteRoutes);
 app.use('/api/ordenes', ordenRoutes);
 app.use('/api/vehiculos', vehiculoRoutes);
 app.use('/api/diagnosticos', diagnosticoRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 
 
