@@ -1,113 +1,158 @@
-const db = require('../config/db');
-const QUERIES = require('../constants/queries/clienteQueries');
-
-class Cliente {
-  static async findAll() {
-    const result = await db.query(QUERIES.FIND_ALL);
-    return result.rows;
+const Cliente = class Cliente {
+  constructor({
+    id,
+    dni,
+    primer_nombre,
+    segundo_nombre,
+    primer_apellido,
+    segundo_apellido,
+    telefono,
+    correo,
+    direccion_id,
+    direccion = null,
+    total_vehiculos = 0,
+    vehiculos = [],
+    fecha_registro
+  } = {}) {
+    this.id = id;
+    this.dni = dni;
+    this.primer_nombre = primer_nombre;
+    this.segundo_nombre = segundo_nombre;
+    this.primer_apellido = primer_apellido;
+    this.segundo_apellido = segundo_apellido;
+    this.telefono = telefono;
+    this.correo = correo;
+    this.direccion_id = direccion_id;
+    this.direccion = direccion;
+    this.total_vehiculos = total_vehiculos;
+    this.vehiculos = vehiculos;
+    this.fecha_registro = fecha_registro || new Date();
   }
 
-  static async findById(id) {
-    const result = await db.query(QUERIES.FIND_BY_ID, [id]);
-    return result.rows[0] || null;
+  get nombre_completo() {
+    const nombres = [this.primer_nombre];
+    if (this.segundo_nombre) nombres.push(this.segundo_nombre);
+    const apellidos = [this.primer_apellido];
+    if (this.segundo_apellido) apellidos.push(this.segundo_apellido);
+    return [...nombres, ...apellidos].join(' ');
   }
 
-  static async findByDni(dni) {
-    const result = await db.query(QUERIES.FIND_BY_DNI, [dni]);
-    return result.rows[0] || null;
+  get nombre_corto() {
+    return `${this.primer_nombre} ${this.primer_apellido}`;
   }
 
-  static async findByNombre(nombre) {
-    const result = await db.query(QUERIES.FIND_BY_NOMBRE, [`%${nombre}%`]);
-    return result.rows;
+  get tiene_direccion() {
+    return !!this.direccion;
   }
 
-  static async createDireccion({ calle, colonia, ciudad, departamento, referencia }) {
-    const result = await db.query(QUERIES.CREATE_DIRECCION, [
-      calle, colonia, ciudad, departamento, referencia || null
-    ]);
-    return result.rows[0].id;
+  get tiene_vehiculos() {
+    return this.total_vehiculos > 0 || this.vehiculos.length > 0;
   }
 
-  static async create({ dni, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, telefono, correo, direccion }) {
-    let direccionId = null;
-    if (direccion) {
-      direccionId = await this.createDireccion(direccion);
-    }
-
-    const result = await db.query(QUERIES.CREATE, [
-      dni, primer_nombre, segundo_nombre || null, primer_apellido, 
-      segundo_apellido, telefono, correo || null, direccionId
-    ]);
-    return result.rows[0];
+  agregarVehiculo(vehiculo) {
+    this.vehiculos.push(vehiculo);
+    this.total_vehiculos++;
   }
 
-  static async update(id, data) {
-    const cliente = await this.findById(id);
-    if (!cliente) return null;
-
-    if (data.direccion) {
-      if (cliente.direccion_id) {
-        await db.query(QUERIES.UPDATE_DIRECCION, [
-          data.direccion.calle, data.direccion.colonia, data.direccion.ciudad,
-          data.direccion.departamento, data.direccion.referencia || null, cliente.direccion_id
-        ]);
-      } else {
-        const direccionId = await this.createDireccion(data.direccion);
-        data.direccion_id = direccionId;
-      }
-    }
-
-    const result = await db.query(QUERIES.UPDATE, [
-      data.dni || null,
-      data.primer_nombre || null,
-      data.segundo_nombre !== undefined ? data.segundo_nombre : null,
-      data.primer_apellido || null,
-      data.segundo_apellido || null,
-      data.telefono || null,
-      data.correo !== undefined ? data.correo : null,
-      data.direccion_id || null,
-      id
-    ]);
-    return result.rows[0] || null;
+  actualizarDatos(datos) {
+    if (datos.primer_nombre) this.primer_nombre = datos.primer_nombre;
+    if (datos.segundo_nombre !== undefined) this.segundo_nombre = datos.segundo_nombre;
+    if (datos.primer_apellido) this.primer_apellido = datos.primer_apellido;
+    if (datos.segundo_apellido !== undefined) this.segundo_apellido = datos.segundo_apellido;
+    if (datos.telefono) this.telefono = datos.telefono;
+    if (datos.correo !== undefined) this.correo = datos.correo;
+    if (datos.direccion) this.direccion = datos.direccion;
   }
 
-  static async registrarAuditoria({ cliente_id, campo_modificado, valor_anterior, valor_nuevo }) {
-    const result = await db.query(QUERIES.REGISTRAR_AUDITORIA, [
-      cliente_id, campo_modificado, valor_anterior, valor_nuevo
-    ]);
-    return result.rows[0];
+  validarDni() {
+    return /^[0-9]{13}$/.test(this.dni);
   }
 
-  static async delete(id) {
-    const checkResult = await db.query(QUERIES.CHECK_ORDENES, [id]);
-    const tieneOrdenes = parseInt(checkResult.rows[0].count) > 0;
-    if (tieneOrdenes) {
-      throw new Error('No se puede eliminar un cliente con órdenes de trabajo asociadas');
-    }
-
-    const result = await db.query(QUERIES.DELETE, [id]);
-    return result.rows[0] || null;
+  validarTelefono() {
+    return /^[0-9]{4}-[0-9]{4}$/.test(this.telefono);
   }
 
-  static async getHistorial(id, fecha_inicio, fecha_fin) {
-    let query = QUERIES.GET_HISTORIAL_BASE;
-    const params = [id];
-    let index = 2;
-
-    if (fecha_inicio) {
-      query += ` AND o.fecha_ingreso >= $${index++}`;
-      params.push(fecha_inicio);
-    }
-    if (fecha_fin) {
-      query += ` AND o.fecha_ingreso <= $${index++}`;
-      params.push(fecha_fin);
-    }
-
-    query += ` ORDER BY o.fecha_ingreso DESC`;
-    const result = await db.query(query, params);
-    return result.rows;
+  validarCorreo() {
+    if (!this.correo) return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.correo);
   }
-}
+
+  esValido() {
+    return (
+      this.dni &&
+      this.primer_nombre &&
+      this.primer_apellido &&
+      this.telefono &&
+      this.validarDni() &&
+      this.validarTelefono() &&
+      this.validarCorreo()
+    );
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      dni: this.dni,
+      primer_nombre: this.primer_nombre,
+      segundo_nombre: this.segundo_nombre,
+      primer_apellido: this.primer_apellido,
+      segundo_apellido: this.segundo_apellido,
+      nombre_completo: this.nombre_completo,
+      telefono: this.telefono,
+      correo: this.correo,
+      direccion: this.direccion,
+      direccion_id: this.direccion_id,
+      total_vehiculos: this.total_vehiculos,
+      vehiculos: this.vehiculos,
+      fecha_registro: this.fecha_registro
+    };
+  }
+
+  toDatabase() {
+    return {
+      id: this.id,
+      dni: this.dni,
+      primer_nombre: this.primer_nombre,
+      segundo_nombre: this.segundo_nombre,
+      primer_apellido: this.primer_apellido,
+      segundo_apellido: this.segundo_apellido,
+      telefono: this.telefono,
+      correo: this.correo,
+      direccion_id: this.direccion_id,
+      fecha_registro: this.fecha_registro
+    };
+  }
+
+  static fromDatabase(data) {
+    return new Cliente({
+      id: data.id,
+      dni: data.dni,
+      primer_nombre: data.primer_nombre,
+      segundo_nombre: data.segundo_nombre,
+      primer_apellido: data.primer_apellido,
+      segundo_apellido: data.segundo_apellido,
+      telefono: data.telefono,
+      correo: data.correo,
+      direccion_id: data.direccion_id,
+      direccion: data.direccion,
+      total_vehiculos: data.total_vehiculos || 0,
+      vehiculos: data.vehiculos || [],
+      fecha_registro: data.fecha_registro
+    });
+  }
+
+  static forRegistration(data) {
+    return new Cliente({
+      dni: data.dni,
+      primer_nombre: data.primer_nombre,
+      segundo_nombre: data.segundo_nombre || null,
+      primer_apellido: data.primer_apellido,
+      segundo_apellido: data.segundo_apellido || null,
+      telefono: data.telefono,
+      correo: data.correo || null,
+      direccion: data.direccion || null
+    });
+  }
+};
 
 module.exports = Cliente;

@@ -1,63 +1,131 @@
-const db = require('../config/db');
-const bcrypt = require('bcryptjs');
-const QUERIES = require('../constants/queries/usuarioQueries');
-
-class Usuario {
-  static async findByUsername(nombre_usuario) {
-    const result = await db.query(QUERIES.FIND_BY_USERNAME, [nombre_usuario]);
-    return result.rows[0] || null;
+const Usuario = class Usuario {
+  constructor({
+    id,
+    nombre_completo,
+    nombre_usuario,
+    correo,
+    contrasena_hash,
+    rol_id,
+    rol,
+    activo,
+    fecha_creacion,
+    fecha_actualizacion
+  } = {}) {
+    this.id = id;
+    this.nombre_completo = nombre_completo;
+    this.nombre_usuario = nombre_usuario;
+    this.correo = correo;
+    this.contrasena_hash = contrasena_hash;
+    this.rol_id = rol_id;
+    this.rol = rol;
+    this.activo = activo !== undefined ? activo : true;
+    this.fecha_creacion = fecha_creacion || new Date();
+    this.fecha_actualizacion = fecha_actualizacion || new Date();
   }
 
-  static async findByEmail(email) {
-    const result = await db.query(QUERIES.FIND_BY_EMAIL, [email]);
-    return result.rows[0] || null;
+  esActivo() {
+    return this.activo === true;
   }
 
-  static async findAll() {
-    const result = await db.query(QUERIES.FIND_ALL);
-    return result.rows;
+  esAdministrador() {
+    return this.rol === 'administrador' || this.rol_id === 1;
   }
 
-  static async findById(id) {
-    const result = await db.query(QUERIES.FIND_BY_ID, [id]);
-    return result.rows[0] || null;
+  esMecanico() {
+    return this.rol === 'mecanico' || this.rol_id === 2;
   }
 
-  static async create(data) {
-    const { nombre_completo, nombre_usuario, correo, contrasena, rol_id } = data;
-    const salt = await bcrypt.genSalt(10);
-    const contrasena_hash = await bcrypt.hash(contrasena, salt);
-
-    const result = await db.query(QUERIES.CREATE, [
-      nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id
-    ]);
-    return result.rows[0];
+  esRecepcionista() {
+    return this.rol === 'recepcionista' || this.rol_id === 3;
   }
 
-  static async update(id, data) {
-    const { nombre_completo, correo, contrasena, rol_id } = data;
-
-    let contrasena_hash = null;
-    if (contrasena) {
-      const salt = await bcrypt.genSalt(10);
-      contrasena_hash = await bcrypt.hash(contrasena, salt);
-    }
-
-    const result = await db.query(QUERIES.UPDATE, [
-      nombre_completo, correo, contrasena_hash, rol_id, id
-    ]);
-    return result.rows[0] || null;
+  tieneRol(rolNombre) {
+    return this.rol === rolNombre;
   }
 
-  static async toggleStatus(id, activo) {
-    const result = await db.query(QUERIES.TOGGLE_STATUS, [activo, id]);
-    return result.rows[0] || null;
+  desactivar() {
+    this.activo = false;
+    this.fecha_actualizacion = new Date();
   }
 
-  static async delete(id) {
-    const result = await db.query(QUERIES.DELETE, [id]);
-    return result.rows[0] || null;
+  activar() {
+    this.activo = true;
+    this.fecha_actualizacion = new Date();
   }
-}
+
+  actualizarDatos(datos) {
+    if (datos.nombre_completo) this.nombre_completo = datos.nombre_completo;
+    if (datos.correo) this.correo = datos.correo;
+    if (datos.rol_id) this.rol_id = datos.rol_id;
+    this.fecha_actualizacion = new Date();
+  }
+
+  cambiarContrasena(nuevoHash) {
+    this.contrasena_hash = nuevoHash;
+    this.fecha_actualizacion = new Date();
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      nombre_completo: this.nombre_completo,
+      nombre_usuario: this.nombre_usuario,
+      correo: this.correo,
+      rol: this.rol,
+      rol_id: this.rol_id,
+      activo: this.activo,
+      fecha_creacion: this.fecha_creacion,
+      fecha_actualizacion: this.fecha_actualizacion
+    };
+  }
+
+  toAuthPayload() {
+    return {
+      id: this.id,
+      nombre_usuario: this.nombre_usuario,
+      rol: this.rol
+    };
+  }
+
+  toDatabase() {
+    return {
+      id: this.id,
+      nombre_completo: this.nombre_completo,
+      nombre_usuario: this.nombre_usuario,
+      correo: this.correo,
+      contrasena_hash: this.contrasena_hash,
+      rol_id: this.rol_id,
+      activo: this.activo,
+      fecha_creacion: this.fecha_creacion,
+      fecha_actualizacion: this.fecha_actualizacion
+    };
+  }
+
+  static fromDatabase(data) {
+    return new Usuario({
+      id: data.id,
+      nombre_completo: data.nombre_completo,
+      nombre_usuario: data.nombre_usuario,
+      correo: data.correo,
+      contrasena_hash: data.contrasena_hash,
+      rol_id: data.rol_id,
+      rol: data.rol,
+      activo: data.activo,
+      fecha_creacion: data.fecha_creacion,
+      fecha_actualizacion: data.fecha_actualizacion
+    });
+  }
+
+  static forRegistration(data, hash) {
+    return new Usuario({
+      nombre_completo: data.nombre_completo,
+      nombre_usuario: data.nombre_usuario,
+      correo: data.correo,
+      contrasena_hash: hash,
+      rol_id: data.rol_id || 3,
+      activo: true
+    });
+  }
+};
 
 module.exports = Usuario;

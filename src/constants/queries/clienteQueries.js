@@ -1,5 +1,4 @@
 module.exports = {
-
   FIND_ALL: `
     SELECT c.*, 
       d.calle, d.colonia, d.ciudad, d.departamento, d.referencia,
@@ -25,7 +24,6 @@ module.exports = {
     LEFT JOIN direcciones d ON c.direccion_id = d.id
     WHERE c.dni = $1
   `,
-
 
   FIND_BY_NOMBRE: `
     SELECT c.*, 
@@ -87,9 +85,18 @@ module.exports = {
   DELETE: `
     DELETE FROM clientes WHERE id = $1 RETURNING id
   `,
+
   GET_HISTORIAL: `
     SELECT
-      o.*,
+      o.numero_orden,
+      o.vehiculo_id,
+      o.mecanico_id,
+      o.fecha_ingreso,
+      o.descripcion_problema,
+      o.estado,
+      o.prioridad,
+      o.fecha_creacion,
+      o.fecha_actualizacion,
       v.placa,
       v.modelo,
       u.nombre_completo AS mecanico_nombre,
@@ -98,7 +105,8 @@ module.exports = {
     FROM ordenes_trabajo o
     LEFT JOIN vehiculos v ON o.vehiculo_id = v.id
     LEFT JOIN usuarios u ON o.mecanico_id = u.id
-    LEFT JOIN diagnosticos d ON o.id = d.orden_id
+    LEFT JOIN diagnosticos d ON o.numero_orden = d.orden_id
     WHERE v.cliente_id = $1
-  `,
+    ORDER BY o.fecha_ingreso DESC
+  `
 };

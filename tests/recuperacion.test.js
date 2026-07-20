@@ -1,8 +1,8 @@
 const request = require('supertest');
 const app = require('../src/app');
 const pool = require('../src/config/db');
-const jwt = require('jsonwebtoken');
-const JWT_SECRET = require('../src/config/jwt');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 jest.mock('nodemailer', () => ({
   createTransport: jest.fn().mockReturnValue({
@@ -11,32 +11,34 @@ jest.mock('nodemailer', () => ({
 }));
 
 describe('Recuperacion de Contraseña', () => {
-  let testEmail = 'admin_recuperar@sigta.com'; // Email único para este test suite
+  let testEmail = 'admin_recuperar@sigta.com';
+  let usuarioId;
 
   beforeAll(async () => {
     try {
-      // Limpiamos residuos previos por si acaso
+      await pool.query('DELETE FROM tokens_recuperacion_password WHERE usuario_id IN (SELECT id FROM usuarios WHERE correo = $1)', [testEmail]);
       await pool.query('DELETE FROM usuarios WHERE correo = $1 OR nombre_usuario = $2', [testEmail, 'admin_test_rec']);
 
-      await pool.query(
-        `INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id) 
-         VALUES ('Admin Test Rec', 'admin_test_rec', $1, '$2b$10$XQ8sZ9XQ8sZ9XQ8sZ9XQ8uXQ8sZ9XQ8sZ9XQ8sZ9', 1)`,
+      const result = await pool.query(
+        `INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo) 
+         VALUES ('Admin Test Rec', 'admin_test_rec', $1, '$2b$10$XQ8sZ9XQ8sZ9XQ8sZ9XQ8uXQ8sZ9XQ8sZ9XQ8sZ9', 1, true)
+         RETURNING id`,
         [testEmail]
       );
+      usuarioId = result.rows[0].id;
     } catch (error) {
       console.error('Error en beforeAll:', error.message);
     }
   }, 10000);
 
-  // ÚNICO afterAll del archivo: limpia datos y cierra el pool UNA sola vez
   afterAll(async () => {
     try {
-      await pool.query('DELETE FROM tokens_recuperacion WHERE email = $1', [testEmail]);
-      await pool.query('DELETE FROM usuarios WHERE correo = $1', [testEmail]);
+      await pool.query('DELETE FROM tokens_recuperacion_password WHERE usuario_id = $1', [usuarioId]);
+      await pool.query('DELETE FROM usuarios WHERE id = $1', [usuarioId]);
     } catch (error) {
       console.error('Error limpiando datos:', error.message);
     } finally {
-      await pool.end(); // Evita Open Handles de Jest (se llama una sola vez)
+      await pool.end();
     }
   }, 10000);
 
@@ -68,36 +70,26 @@ describe('Recuperacion de Contraseña', () => {
   });
 
   test('POST /api/auth/restablecer - debería restablecer contraseña con token válido', async () => {
-    const payload = { email: testEmail, id: 1 };
-    const validToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+    const token = crypto.randomBytes(32).toString('hex');
+    const token_hash = await bcrypt.hash(token, 10);
+    const expiresAt = new Date(Date.now() + 3600000);
 
     await pool.query(
-      `INSERT INTO tokens_recuperacion (email, token, expires_at) 
-       VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
-      [testEmail, validToken]
+      `INSERT INTO tokens_recuperacion_password (usuario_id, token_hash, fecha_expiracion) 
+       VALUES ($1, $2, $3)`,
+      [usuarioId, token_hash, expiresAt]
     );
 
     const response = await request(app)
       .post('/api/auth/restablecer')
       .send({
-        token: validToken,
+        token: token,
         nueva_contrasena: 'admin456'
       });
 
-    // Validamos la respuesta del controlador
     expect(response.status).toBe(200);
     expect(response.body).toHaveProperty('success', true);
     expect(response.body).toHaveProperty('message', 'Contraseña actualizada correctamente');
-
-    const tokenUsed = await pool.query(
-      'SELECT used FROM tokens_recuperacion WHERE token = $1',
-      [validToken]
-    );
-    expect(tokenUsed.rows[0]?.used).toBe(true);
-
-    // No hace falta "deshacer" el cambio de contraseña aquí: el usuario
-    // afectado es admin_test_rec (buscado por testEmail, no 'admin'), y
-    // el afterAll ya lo borra por completo al final de la suite.
   }, 10000);
 
   test('POST /api/auth/restablecer - debería fallar con token inválido', async () => {

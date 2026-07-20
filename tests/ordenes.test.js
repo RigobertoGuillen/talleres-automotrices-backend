@@ -1,22 +1,40 @@
 const request = require('supertest');
 const app = require('../src/app');
 const pool = require('../src/config/db');
+const bcrypt = require('bcryptjs');
 
 describe('Ordenes de Trabajo Endpoints', () => {
   let token;
-  let ordenId;
+  let numeroOrden;
   let mecanicoId;
   let vehiculoId;
 
   beforeAll(async () => {
+    // Asegurar que el usuario admin existe
+    const hash = await bcrypt.hash('admin123', 10);
+    await pool.query(`DELETE FROM usuarios WHERE nombre_usuario = 'admin'`);
+    await pool.query(
+      `INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
+       VALUES ('Administrador', 'admin', 'admin@taller.com', $1, 
+               (SELECT id FROM roles WHERE nombre = 'administrador'), true)`,
+      [hash]
+    );
+
+    // Obtener token
     const response = await request(app)
       .post('/api/auth/login')
       .send({
         nombre_usuario: 'admin',
         contrasena: 'admin123'
       });
+
     token = response.body.token;
 
+    if (!token) {
+      throw new Error('No se pudo obtener el token: ' + JSON.stringify(response.body));
+    }
+
+    // Obtener mecánico
     const mecanicoResult = await pool.query(
       "SELECT id FROM usuarios WHERE rol_id = (SELECT id FROM roles WHERE nombre = 'mecanico') LIMIT 1"
     );
@@ -24,52 +42,26 @@ describe('Ordenes de Trabajo Endpoints', () => {
       mecanicoId = mecanicoResult.rows[0].id;
     }
 
-    const vehiculoResult = await pool.query(
-      "SELECT id FROM vehiculos LIMIT 1"
-    );
+    // Obtener vehículo existente
+    const vehiculoResult = await pool.query("SELECT id FROM vehiculos LIMIT 1");
     if (vehiculoResult.rows.length > 0) {
       vehiculoId = vehiculoResult.rows[0].id;
-    } else {
-      const clienteResult = await pool.query("SELECT id FROM clientes LIMIT 1");
-      let clienteId = clienteResult.rows[0]?.id;
-
-      if (!clienteId) {
-        // Esquema normalizado: dni, primer_nombre, primer_apellido y
-        // segundo_apellido son NOT NULL. id se autogenera (IDENTITY).
-        const newCliente = await pool.query(
-          `INSERT INTO clientes (dni, primer_nombre, primer_apellido, segundo_apellido, telefono)
-           VALUES ('0801199912345', 'Cliente', 'Prueba', 'Ordenes', '8888-8888')
-           RETURNING id`
-        );
-        clienteId = newCliente.rows[0].id;
-      }
-
-      // vehiculos.marca_id es FK a marcas_vehiculo, ya no existe columna
-      // de texto "marca". Buscamos un id real de marca.
-      const marcaResult = await pool.query(
-        "SELECT id FROM marcas_vehiculo WHERE nombre = 'Toyota' LIMIT 1"
-      );
-      const marcaId = marcaResult.rows[0].id;
-
-      const newVehiculo = await pool.query(
-        `INSERT INTO vehiculos (placa, marca_id, modelo, anio, color, tipo, cliente_id)
-         VALUES ('ORD-999', $1, 'Prueba', 2020, 'Blanco', 'turismo', $2)
-         RETURNING id`,
-        [marcaId, clienteId]
-      );
-      vehiculoId = newVehiculo.rows[0].id;
     }
   });
 
   afterAll(async () => {
-    // historial_estados_orden, diagnosticos y orden_servicio tienen
-    // ON DELETE CASCADE sobre ordenes_trabajo, así que se limpian solos.
-    // movimientos_inventario NO tiene cascade, pero esta suite no genera
-    // movimientos de inventario, así que el DELETE de abajo es seguro.
-    await pool.query("DELETE FROM movimientos_inventario");
-    await pool.query("DELETE FROM ordenes_trabajo WHERE vehiculo_id = $1", [vehiculoId]);
-    await pool.query("DELETE FROM vehiculos WHERE placa LIKE 'ORD-%'");
-    await pool.end();
+    try {
+      // Eliminar órdenes de trabajo por numero_orden
+      if (numeroOrden) {
+        await pool.query("DELETE FROM diagnosticos WHERE orden_id = $1", [numeroOrden]);
+        await pool.query("DELETE FROM historial_estados_orden WHERE orden_id = $1", [numeroOrden]);
+        await pool.query("DELETE FROM ordenes_trabajo WHERE numero_orden = $1", [numeroOrden]);
+      }
+    } catch (error) {
+      console.error('Error limpiando datos:', error.message);
+    } finally {
+      await pool.end();
+    }
   });
 
   test('POST /api/ordenes - debería crear una orden de trabajo', async () => {
@@ -84,18 +76,18 @@ describe('Ordenes de Trabajo Endpoints', () => {
 
     expect(response.status).toBe(201);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('id');
-    ordenId = response.body.data.id;
+    expect(response.body.data).toHaveProperty('numero_orden');
+    numeroOrden = response.body.data.numero_orden;
   });
 
   test('GET /api/ordenes/:id - debería obtener detalle de una orden', async () => {
     const response = await request(app)
-      .get(`/api/ordenes/${ordenId}`)
+      .get(`/api/ordenes/${numeroOrden}`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('id', ordenId);
+    expect(response.body.data).toHaveProperty('numero_orden', numeroOrden);
   });
 
   test('GET /api/ordenes?estado=recibido - debería filtrar por estado', async () => {
@@ -115,7 +107,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
     }
 
     const response = await request(app)
-      .patch(`/api/ordenes/${ordenId}/asignar`)
+      .patch(`/api/ordenes/${numeroOrden}/asignar`)
       .set('Authorization', `Bearer ${token}`)
       .send({ mecanico_id: mecanicoId });
 
@@ -126,7 +118,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
 
   test('PATCH /api/ordenes/:id/estado - debería actualizar el estado', async () => {
     const response = await request(app)
-      .patch(`/api/ordenes/${ordenId}/estado`)
+      .patch(`/api/ordenes/${numeroOrden}/estado`)
       .set('Authorization', `Bearer ${token}`)
       .send({
         estado: 'en reparacion',
@@ -155,7 +147,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
 
   test('PATCH /api/ordenes/:id/cerrar - debería cerrar la orden', async () => {
     const response = await request(app)
-      .patch(`/api/ordenes/${ordenId}/cerrar`)
+      .patch(`/api/ordenes/${numeroOrden}/cerrar`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
@@ -169,6 +161,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
       return;
     }
 
+    // Crear una nueva orden para reasignar
     const newOrden = await request(app)
       .post('/api/ordenes')
       .set('Authorization', `Bearer ${token}`)
@@ -178,10 +171,10 @@ describe('Ordenes de Trabajo Endpoints', () => {
         prioridad: 1
       });
 
-    const newOrdenId = newOrden.body.data.id;
+    const newNumeroOrden = newOrden.body.data.numero_orden;
 
     const response = await request(app)
-      .patch(`/api/ordenes/${newOrdenId}/reasignar`)
+      .patch(`/api/ordenes/${newNumeroOrden}/reasignar`)
       .set('Authorization', `Bearer ${token}`)
       .send({ mecanico_id: mecanicoId });
 

@@ -1,6 +1,14 @@
 module.exports = {
   FIND_ALL_BASE: `
-    SELECT o.*, 
+    SELECT o.numero_orden, 
+           o.vehiculo_id,
+           o.mecanico_id,
+           o.fecha_ingreso,
+           o.descripcion_problema,
+           o.estado,
+           o.prioridad,
+           o.fecha_creacion,
+           o.fecha_actualizacion,
            v.placa, v.modelo,
            CONCAT(c.primer_nombre, ' ', c.primer_apellido) as cliente_nombre,
            u.nombre_completo as mecanico_nombre
@@ -12,38 +20,55 @@ module.exports = {
   `,
 
   FIND_BY_ID: `
-    SELECT o.*, 
-            v.placa, v.modelo, m.nombre AS marca, v.anio,
-            c.id as cliente_id, 
-            CONCAT(c.primer_nombre, ' ', c.primer_apellido) as cliente_nombre, 
-            c.telefono,
-            u.id as mecanico_id, u.nombre_completo as mecanico_nombre,
-            COALESCE(
-              (SELECT json_agg(json_build_object(
-                'id', d.id,
-                'descripcion_falla', d.descripcion_falla,
-                'observaciones', d.observaciones,
-                'estado', d.estado
-              )) FROM diagnosticos d WHERE d.orden_id = o.id),
-              '[]'::json
-            ) as diagnosticos,
-            COALESCE(
-              (SELECT json_agg(json_build_object(
-                'id', h.id,
-                'estado', h.estado,
-                'notas', h.notas,
-                'fecha_hora', h.fecha_hora
-              ) ORDER BY h.fecha_hora DESC) 
-              FROM historial_estados_orden h WHERE h.orden_id = o.id),
-              '[]'::json
-            ) as historial_estados
+    SELECT 
+      o.numero_orden,
+      o.vehiculo_id,
+      o.mecanico_id,
+      o.fecha_ingreso,
+      o.descripcion_problema,
+      o.estado,
+      o.prioridad,
+      o.fecha_creacion,
+      o.fecha_actualizacion,
+      v.placa, 
+      v.modelo, 
+      m.nombre AS marca, 
+      v.anio,
+      c.id as cliente_id, 
+      CONCAT(c.primer_nombre, ' ', c.primer_apellido) as cliente_nombre, 
+      c.telefono,
+      u.id as mecanico_id, 
+      u.nombre_completo as mecanico_nombre,
+      COALESCE(
+        (SELECT json_agg(
+          json_build_object(
+            'id', d.id,
+            'descripcion_falla', d.descripcion_falla,
+            'observaciones', d.observaciones,
+            'recomendaciones', d.recomendaciones,
+            'estado', d.estado
+          )
+        ) FROM diagnosticos d WHERE d.orden_id = o.numero_orden),
+        '[]'::json
+      ) as diagnosticos,
+      COALESCE(
+        (SELECT json_agg(
+          json_build_object(
+            'id', h.id,
+            'estado', h.estado,
+            'notas', h.notas,
+            'fecha_hora', h.fecha_hora
+          ) ORDER BY h.fecha_hora DESC
+        ) FROM historial_estados_orden h WHERE h.orden_id = o.numero_orden),
+        '[]'::json
+      ) as historial_estados
     FROM ordenes_trabajo o
     JOIN vehiculos v ON o.vehiculo_id = v.id
     JOIN marcas_vehiculo m ON v.marca_id = m.id
     JOIN clientes c ON v.cliente_id = c.id
     LEFT JOIN usuarios u ON o.mecanico_id = u.id
-    WHERE o.id = $1
-    GROUP BY o.id, v.id, m.id, c.id, u.id
+    WHERE o.numero_orden = $1
+    GROUP BY o.numero_orden, v.id, m.id, c.id, u.id
   `,
 
   CREATE: `
@@ -56,14 +81,14 @@ module.exports = {
   ASIGNAR_MECANICO: `
     UPDATE ordenes_trabajo 
     SET mecanico_id = $1, fecha_actualizacion = NOW() 
-    WHERE id = $2 
+    WHERE numero_orden = $2 
     RETURNING *
   `,
 
   ACTUALIZAR_ESTADO: `
     UPDATE ordenes_trabajo 
     SET estado = $1, fecha_actualizacion = NOW() 
-    WHERE id = $2 
+    WHERE numero_orden = $2 
     RETURNING *
   `,
 
@@ -75,21 +100,27 @@ module.exports = {
   CERRAR: `
     UPDATE ordenes_trabajo 
     SET estado = 'entregado', fecha_actualizacion = NOW() 
-    WHERE id = $1 AND estado != 'entregado'
+    WHERE numero_orden = $1 AND estado != 'entregado'
     RETURNING *
   `,
 
   REASIGNAR: `
     UPDATE ordenes_trabajo 
     SET mecanico_id = $1, fecha_actualizacion = NOW() 
-    WHERE id = $2 
+    WHERE numero_orden = $2 
     RETURNING *
   `,
 
   FIND_BY_MECANICO: `
-    SELECT o.*, 
-            v.placa, v.modelo,
-            CONCAT(c.primer_nombre, ' ', c.primer_apellido) as cliente_nombre
+    SELECT o.numero_orden,
+           o.vehiculo_id,
+           o.mecanico_id,
+           o.fecha_ingreso,
+           o.descripcion_problema,
+           o.estado,
+           o.prioridad,
+           v.placa, v.modelo,
+           CONCAT(c.primer_nombre, ' ', c.primer_apellido) as cliente_nombre
     FROM ordenes_trabajo o
     JOIN vehiculos v ON o.vehiculo_id = v.id
     JOIN clientes c ON v.cliente_id = c.id
@@ -99,5 +130,5 @@ module.exports = {
 
   CHECK_VEHICULO: `
     SELECT cliente_id FROM vehiculos WHERE id = $1
-  `,
+  `
 };
