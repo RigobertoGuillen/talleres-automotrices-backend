@@ -30,6 +30,7 @@ module.exports = {
     ORDER BY d.fecha_registro DESC
   `,
 
+  // 1. Añadimos el casteo '::estado_diagnostico' al resultado del COALESCE
   CREATE: `
     INSERT INTO diagnosticos
       (orden_id, descripcion_falla, observaciones, recomendaciones, estado, mecanico_id)
@@ -54,6 +55,7 @@ module.exports = {
     RETURNING *
   `,
 
+  // 2. Añadimos el casteo '::estado_diagnostico' al parámetro del nuevo estado ($1)
   UPDATE_ESTADO: `
     UPDATE diagnosticos
     SET estado = CAST($1 AS estado_diagnostico), fecha_actualizacion = now()

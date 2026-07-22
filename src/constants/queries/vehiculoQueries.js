@@ -55,4 +55,23 @@ module.exports = {
   FIND_ALL_MARCAS: `
     SELECT id, nombre FROM marcas_vehiculo ORDER BY nombre
   `,
+
+  HISTORIAL: `
+    SELECT 
+      ot.id,
+      ot.numero_orden,
+      ot.vehiculo_id,
+      ot.mecanico_id,
+      ot.fecha_ingreso,
+      ot.descripcion_problema,
+      ot.estado,
+      ot.prioridad,
+      ot.fecha_creacion,
+      ot.fecha_actualizacion,
+      u.nombre_completo AS mecanico
+    FROM ordenes_trabajo ot
+    LEFT JOIN usuarios u ON ot.mecanico_id = u.id
+    WHERE ot.vehiculo_id = $1
+    ORDER BY ot.fecha_creacion DESC
+  `,
 };
