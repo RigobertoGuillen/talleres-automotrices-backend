@@ -12,7 +12,9 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"],
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests/setup.js"
+    ],
     "testTimeout": 30000,
     "verbose": true,
     "collectCoverageFrom": [
@@ -21,5 +23,8 @@
       "!src/server.js",
       "!src/app.js"
     ]
+  },
+  "devDependencies": {
+    "jest": "^30.4.2"
   }
 }
