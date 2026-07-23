@@ -6,12 +6,12 @@ router.get('/stats', async (req, res) => {
   try {
     // 1. Órdenes en progreso (Filtramos usando el estado exacto de tu BD)
     const ordenesProgreso = await db.query(
-      "SELECT COUNT(*) FROM ordenes_trabajo WHERE estado = 'en progreso'"
+      "SELECT COUNT(*) FROM ordenes_trabajo WHERE estado = 'en reparacion'"
     );
 
     // 2. Vehículos por retirar (Órdenes finalizadas listas para entrega)
     const vehiculosListos = await db.query(
-      "SELECT COUNT(*) FROM ordenes_trabajo WHERE estado = 'listo para entrega'"
+      "SELECT COUNT(*) FROM ordenes_trabajo WHERE estado = 'listo'"
     );
 
     // 3. Diagnósticos pendientes
