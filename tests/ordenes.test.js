@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 describe('Ordenes de Trabajo Endpoints', () => {
   let token;
   let numeroOrden;
+  let numeroOrdenReasignada;
   let mecanicoId;
   let vehiculoId;
 
@@ -51,11 +52,13 @@ describe('Ordenes de Trabajo Endpoints', () => {
 
   afterAll(async () => {
     try {
-      // Eliminar órdenes de trabajo por numero_orden
-      if (numeroOrden) {
-        await pool.query("DELETE FROM diagnosticos WHERE orden_id = $1", [numeroOrden]);
-        await pool.query("DELETE FROM historial_estados_orden WHERE orden_id = $1", [numeroOrden]);
-        await pool.query("DELETE FROM ordenes_trabajo WHERE numero_orden = $1", [numeroOrden]);
+      for (const orden of [numeroOrden, numeroOrdenReasignada]) {
+        if (!orden) continue;
+        await pool.query("DELETE FROM factura_detalle WHERE factura_id IN (SELECT id FROM facturas WHERE orden_id = $1)", [orden]);
+        await pool.query("DELETE FROM facturas WHERE orden_id = $1", [orden]);
+        await pool.query("DELETE FROM diagnosticos WHERE orden_id = $1", [orden]);
+        await pool.query("DELETE FROM historial_estados_orden WHERE orden_id = $1", [orden]);
+        await pool.query("DELETE FROM ordenes_trabajo WHERE numero_orden = $1", [orden]);
       }
     } catch (error) {
       console.error('Error limpiando datos:', error.message);
@@ -171,10 +174,12 @@ describe('Ordenes de Trabajo Endpoints', () => {
         prioridad: 1
       });
 
-    const newNumeroOrden = newOrden.body.data.numero_orden;
+    numeroOrdenReasignada = newOrden.body.data.numero_orden;  
+
+    
 
     const response = await request(app)
-      .patch(`/api/ordenes/${newNumeroOrden}/reasignar`)
+      .patch(`/api/ordenes/${numeroOrdenReasignada}/reasignar`)
       .set('Authorization', `Bearer ${token}`)
       .send({ mecanico_id: mecanicoId });
 
