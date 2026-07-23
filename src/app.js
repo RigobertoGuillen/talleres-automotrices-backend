@@ -1,3 +1,4 @@
+// src/app.js - 🔄 ACTUALIZADO
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -10,8 +11,10 @@ const vehiculoRoutes = require('./routes/vehiculoRoutes');
 const diagnosticoRoutes = require('./routes/diagnosticoRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 
+const ErrorHandler = require('./middlewares/errorHandler');
 
 const app = express();
+
 
 app.use(cors());
 app.use(express.json());
@@ -25,25 +28,11 @@ app.use('/api/vehiculos', vehiculoRoutes);
 app.use('/api/diagnosticos', diagnosticoRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
-
-
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Servidor funcionando' });
 });
 
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Ruta no encontrada'
-  });
-});
-
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({
-    success: false,
-    message: 'Error interno del servidor'
-  });
-});
+app.use(ErrorHandler.notFound);
+app.use(ErrorHandler.handle);
 
 module.exports = app;

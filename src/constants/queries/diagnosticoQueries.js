@@ -1,6 +1,6 @@
 module.exports = {
   CHECK_ORDEN: `
-    SELECT id FROM ordenes_trabajo WHERE id = $1
+    SELECT numero_orden FROM ordenes_trabajo WHERE numero_orden = $1
   `,
 
   FIND_ALL: `
@@ -34,7 +34,7 @@ module.exports = {
   CREATE: `
     INSERT INTO diagnosticos
       (orden_id, descripcion_falla, observaciones, recomendaciones, estado, mecanico_id)
-    VALUES ($1, $2, $3, $4, COALESCE($5, 'pendiente')::estado_diagnostico, $6)
+    VALUES ($1, $2, $3, $4, CAST($5 AS estado_diagnostico), $6)
     RETURNING *
   `,
 
@@ -58,8 +58,8 @@ module.exports = {
   // 2. Añadimos el casteo '::estado_diagnostico' al parámetro del nuevo estado ($1)
   UPDATE_ESTADO: `
     UPDATE diagnosticos
-    SET estado = $1::estado_diagnostico, fecha_actualizacion = now()
+    SET estado = CAST($1 AS estado_diagnostico), fecha_actualizacion = now()
     WHERE id = $2
     RETURNING *
-  `,
+  `
 };
