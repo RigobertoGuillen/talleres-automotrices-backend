@@ -3,6 +3,9 @@ const bcrypt = require('bcryptjs');
 
 const setupDatabase = async () => {
   const ddl = `
+    -- ---------------------------------------------------------
+    -- TIPOS ENUMERADOS (guardados con DO$$ para no fallar si ya existen)
+    -- ---------------------------------------------------------
     DO $$ BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'rol_nombre') THEN
             CREATE TYPE rol_nombre AS ENUM ('administrador','mecanico','recepcionista');
@@ -16,17 +19,20 @@ const setupDatabase = async () => {
         IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'estado_orden') THEN
             CREATE TYPE estado_orden AS ENUM ('recibido','en reparacion','listo','entregado');
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'estado_factura') THEN
-            CREATE TYPE estado_factura AS ENUM ('pagada','pendiente','vencida');
-        END IF;
         IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'metodo_pago') THEN
             CREATE TYPE metodo_pago AS ENUM ('efectivo','tarjeta','transferencia');
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tipo_detalle_factura') THEN
+            CREATE TYPE tipo_detalle_factura AS ENUM ('servicio','repuesto');
+        END IF;
     END $$;
 
+    -- ---------------------------------------------------------
+    -- USUARIOS, ROLES Y PERMISOS
+    -- ---------------------------------------------------------
     CREATE TABLE IF NOT EXISTS roles(
-        id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        nombre rol_nombre NOT NULL UNIQUE,
+        id  smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        nombre  rol_nombre NOT NULL UNIQUE,
         descripcion varchar(200)
     );
 
@@ -42,6 +48,17 @@ const setupDatabase = async () => {
         fecha_actualizacion timestamptz NOT NULL DEFAULT now()
     );
 
+    CREATE TABLE IF NOT EXISTS tokens_recuperacion_password(
+        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        usuario_id bigint NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+        token_hash varchar(255) NOT NULL UNIQUE,
+        fecha_expiracion timestamptz NOT NULL,
+        usado boolean NOT NULL DEFAULT false,
+        fecha_creacion timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS tokens_recuperacion_usuario_idx ON tokens_recuperacion_password(usuario_id);
+
     CREATE TABLE IF NOT EXISTS modulos(
         id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         nombre varchar(50) NOT NULL UNIQUE,
@@ -49,14 +66,17 @@ const setupDatabase = async () => {
     );
 
     CREATE TABLE IF NOT EXISTS permisos_rol(
-        rol_id smallint NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        rol_id  smallint NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
         modulo_id smallint NOT NULL REFERENCES modulos(id) ON DELETE CASCADE,
         puede_ver boolean NOT NULL DEFAULT false,
-        puede_editar boolean NOT NULL DEFAULT false,
-        puede_eliminar boolean NOT NULL DEFAULT false,
+        puede_editar    boolean NOT NULL DEFAULT false,
+        puede_eliminar  boolean NOT NULL DEFAULT false,
         PRIMARY KEY (rol_id, modulo_id)
     );
 
+    -- ---------------------------------------------------------
+    -- CLIENTES Y VEHICULOS
+    -- ---------------------------------------------------------
     CREATE TABLE IF NOT EXISTS direcciones(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         calle varchar(150) NOT NULL,
@@ -115,9 +135,14 @@ const setupDatabase = async () => {
     CREATE INDEX IF NOT EXISTS vehiculos_clientes_idx ON vehiculos(cliente_id);
     CREATE INDEX IF NOT EXISTS vehiculos_marca_idx ON vehiculos(marca_id);
 
+    -- ---------------------------------------------------------
+    -- ORDENES DE TRABAJO E HISTORIAL DE ESTADOS
+    -- ---------------------------------------------------------
+    CREATE SEQUENCE IF NOT EXISTS ordenes_trabajo_numero_seq;
+
     CREATE TABLE IF NOT EXISTS ordenes_trabajo(
-        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        numero_orden varchar(20) UNIQUE,
+        numero_orden varchar(20) PRIMARY KEY
+            DEFAULT ('ORD-' || nextval('ordenes_trabajo_numero_seq')),
         vehiculo_id bigint NOT NULL REFERENCES vehiculos(id),
         mecanico_id bigint REFERENCES usuarios(id),
         fecha_ingreso date NOT NULL DEFAULT current_date,
@@ -128,6 +153,8 @@ const setupDatabase = async () => {
         fecha_actualizacion timestamptz NOT NULL DEFAULT now()
     );
 
+    ALTER SEQUENCE ordenes_trabajo_numero_seq OWNED BY ordenes_trabajo.numero_orden;
+
     CREATE INDEX IF NOT EXISTS ordenes_estado_idx ON ordenes_trabajo(estado);
     CREATE INDEX IF NOT EXISTS ordenes_mecanico_idx ON ordenes_trabajo(mecanico_id);
     CREATE INDEX IF NOT EXISTS ordenes_vehiculo_idx ON ordenes_trabajo(vehiculo_id);
@@ -135,7 +162,7 @@ const setupDatabase = async () => {
 
     CREATE TABLE IF NOT EXISTS historial_estados_orden(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
+        orden_id varchar(20) NOT NULL REFERENCES ordenes_trabajo(numero_orden) ON DELETE CASCADE,
         estado estado_orden NOT NULL,
         notas text,
         usuario_id bigint REFERENCES usuarios(id),
@@ -144,9 +171,12 @@ const setupDatabase = async () => {
 
     CREATE INDEX IF NOT EXISTS historial_orden_idx ON historial_estados_orden(orden_id);
 
+    -- ---------------------------------------------------------
+    -- DIAGNOSTICOS TECNICOS
+    -- ---------------------------------------------------------
     CREATE TABLE IF NOT EXISTS diagnosticos(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
+        orden_id varchar(20) NOT NULL REFERENCES ordenes_trabajo(numero_orden),
         descripcion_falla text NOT NULL,
         observaciones text,
         recomendaciones text,
@@ -158,6 +188,23 @@ const setupDatabase = async () => {
 
     CREATE INDEX IF NOT EXISTS diagnosticos_orden_idx ON diagnosticos(orden_id);
 
+    CREATE TABLE IF NOT EXISTS evidencias_diagnostico(
+        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        diagnostico_id bigint NOT NULL REFERENCES diagnosticos(id) ON DELETE CASCADE,
+        usuario_id bigint NOT NULL REFERENCES usuarios(id),
+        nombre_archivo varchar(255) NOT NULL,
+        ruta_archivo text NOT NULL,
+        tipo_archivo varchar(10) NOT NULL CHECK (tipo_archivo IN ('jpg','jpeg','png','webp')),
+        tamano_bytes integer NOT NULL CHECK (tamano_bytes > 0 AND tamano_bytes <= 5242880),
+        fecha_subida timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS evidencias_diagnostico_idx ON evidencias_diagnostico(diagnostico_id);
+    CREATE INDEX IF NOT EXISTS evidencias_usuario_idx ON evidencias_diagnostico(usuario_id);
+
+    -- ---------------------------------------------------------
+    -- INVENTARIO DE REPUESTOS
+    -- ---------------------------------------------------------
     CREATE TABLE IF NOT EXISTS categorias_repuestos(
         id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         nombre varchar(50) NOT NULL UNIQUE
@@ -168,16 +215,18 @@ const setupDatabase = async () => {
         codigo varchar(30) NOT NULL UNIQUE,
         nombre varchar(150) NOT NULL,
         categoria_id smallint REFERENCES categorias_repuestos(id),
+        costo_unitario numeric(10,2) NOT NULL CHECK (costo_unitario >= 0),
         precio_unitario numeric(10,2) NOT NULL CHECK (precio_unitario >= 0),
-        fecha_creacion timestamptz NOT NULL DEFAULT now()
+        fecha_creacion timestamptz NOT NULL DEFAULT now(),
+        CONSTRAINT precio_mayor_o_igual_costo CHECK (precio_unitario >= costo_unitario)
     );
 
     CREATE INDEX IF NOT EXISTS repuestos_categoria_idx ON repuestos(categoria_id);
 
     CREATE TABLE IF NOT EXISTS stock_repuestos(
         repuesto_id bigint PRIMARY KEY REFERENCES repuestos(id) ON DELETE CASCADE,
-        cantidad_disponible integer NOT NULL DEFAULT 0 CHECK (cantidad_disponible >= 0),
-        cantidad_minima integer NOT NULL DEFAULT 0 CHECK (cantidad_minima >= 0),
+        cantidad_disponible integer NOT NULL DEFAULT 0 CHECK (cantidad_disponible >=0),
+        cantidad_minima integer NOT NULL DEFAULT 0 CHECK (cantidad_minima >=0),
         fecha_actualizacion timestamptz NOT NULL DEFAULT now()
     );
 
@@ -187,7 +236,7 @@ const setupDatabase = async () => {
         tipo_movimiento varchar(10) NOT NULL CHECK (tipo_movimiento IN ('entrada','salida')),
         cantidad integer NOT NULL CHECK (cantidad > 0),
         motivo varchar(100),
-        orden_id bigint REFERENCES ordenes_trabajo(id),
+        orden_id varchar(20) REFERENCES ordenes_trabajo(numero_orden),
         usuario_id bigint REFERENCES usuarios(id),
         fecha_hora timestamptz NOT NULL DEFAULT now()
     );
@@ -197,9 +246,10 @@ const setupDatabase = async () => {
 
     CREATE TABLE IF NOT EXISTS solicitudes_repuestos(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
+        orden_id varchar(20) NOT NULL REFERENCES ordenes_trabajo(numero_orden) ON DELETE CASCADE,
         repuesto_id bigint NOT NULL REFERENCES repuestos(id),
         cantidad_solicitada integer NOT NULL CHECK (cantidad_solicitada > 0),
+        costo_historico numeric(10,2) NOT NULL,
         precio_historico numeric(10,2) NOT NULL,
         mecanico_id bigint REFERENCES usuarios(id),
         fecha_solicitud timestamptz NOT NULL DEFAULT now()
@@ -208,8 +258,11 @@ const setupDatabase = async () => {
     CREATE INDEX IF NOT EXISTS solicitudes_orden_idx ON solicitudes_repuestos(orden_id);
     CREATE INDEX IF NOT EXISTS solicitudes_repuesto_idx ON solicitudes_repuestos(repuesto_id);
 
+    -- ---------------------------------------------------------
+    -- SERVICIOS REALIZADOS
+    -- ---------------------------------------------------------
     CREATE TABLE IF NOT EXISTS servicio_catalogo(
-        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
         nombre varchar(100) NOT NULL UNIQUE,
         descripcion text,
         precio_base numeric(10,2) NOT NULL DEFAULT 0 CHECK (precio_base >= 0)
@@ -217,7 +270,7 @@ const setupDatabase = async () => {
 
     CREATE TABLE IF NOT EXISTS orden_servicio(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        orden_id bigint NOT NULL REFERENCES ordenes_trabajo(id) ON DELETE CASCADE,
+        orden_id varchar(20) NOT NULL REFERENCES ordenes_trabajo(numero_orden) ON DELETE CASCADE,
         servicio_id bigint NOT NULL REFERENCES servicio_catalogo(id),
         tiempo_empleado_minutos integer CHECK (tiempo_empleado_minutos >= 0),
         observaciones text,
@@ -227,50 +280,215 @@ const setupDatabase = async () => {
 
     CREATE INDEX IF NOT EXISTS orden_servicios_orden_idx ON orden_servicio(orden_id);
 
-    -- Conservadas de tu esquema anterior. No estaban en el script nuevo,
-    -- pero facturación y recuperación de contraseña dependen de ellas.
+    -- ---------------------------------------------------------
+    -- FACTURACION (CAI / SAR Honduras)
+    -- ---------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS autorizaciones_cai(
+        id smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        cai varchar(44) NOT NULL UNIQUE
+            CHECK (cai ~ '^[0-9A-Z]{6}(-[0-9A-Z]{6}){5}-[0-9A-Z]{2}$'),
+        punto_emision varchar(11) NOT NULL
+            CHECK (punto_emision ~ '^[0-9]{3}-[0-9]{3}-[0-9]{2}$'),
+        rango_autorizado_inicio varchar(19) NOT NULL
+            CHECK (rango_autorizado_inicio ~ '^[0-9]{3}-[0-9]{3}-[0-9]{2}-[0-9]{8}$'),
+        rango_autorizado_fin varchar(19) NOT NULL
+            CHECK (rango_autorizado_fin ~ '^[0-9]{3}-[0-9]{3}-[0-9]{2}-[0-9]{8}$'),
+        fecha_limite_emision date NOT NULL,
+        fecha_autorizacion date NOT NULL DEFAULT current_date,
+        activo boolean NOT NULL DEFAULT true,
+        CHECK (rango_autorizado_fin > rango_autorizado_inicio)
+    );
+
     CREATE TABLE IF NOT EXISTS facturas(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        numero_factura varchar(20) UNIQUE,
-        orden_id bigint NOT NULL UNIQUE REFERENCES ordenes_trabajo(id),
-        subtotal numeric(10,2) NOT NULL,
-        impuestos numeric(10,2) NOT NULL DEFAULT 0,
-        total numeric(10,2) NOT NULL,
-        estado estado_factura NOT NULL DEFAULT 'pendiente',
-        fecha_emision timestamptz NOT NULL DEFAULT now(),
-        fecha_vencimiento date,
-        fecha_pago timestamptz,
+        orden_id varchar(20) NOT NULL UNIQUE REFERENCES ordenes_trabajo(numero_orden),
+        cai_id smallint NOT NULL REFERENCES autorizaciones_cai(id),
+        numero_factura varchar(19) NOT NULL UNIQUE
+            CHECK (numero_factura ~ '^[0-9]{3}-[0-9]{3}-[0-9]{2}-[0-9]{8}$'),
+        cliente_dni varchar(13) NOT NULL,
+        cliente_nombre varchar(300) NOT NULL,
+        cliente_direccion text,
         metodo_pago metodo_pago,
-        recordatorio_enviado boolean NOT NULL DEFAULT false
+        subtotal_exento numeric(10,2) NOT NULL DEFAULT 0 CHECK (subtotal_exento >= 0),
+        subtotal_gravado_15 numeric(10,2) NOT NULL DEFAULT 0 CHECK (subtotal_gravado_15 >= 0),
+        isv_15 numeric(10,2) GENERATED ALWAYS AS (round(subtotal_gravado_15 * 0.15, 2)) STORED,
+        total numeric(10,2) GENERATED ALWAYS AS
+            (subtotal_exento + subtotal_gravado_15 + round(subtotal_gravado_15 * 0.15, 2)) STORED,
+        fecha_emision timestamptz NOT NULL DEFAULT now()
     );
 
-    CREATE TABLE IF NOT EXISTS pagos(
+    CREATE INDEX IF NOT EXISTS facturas_orden_idx ON facturas(orden_id);
+    CREATE INDEX IF NOT EXISTS facturas_cai_idx ON facturas(cai_id);
+
+    CREATE OR REPLACE FUNCTION fn_validar_factura_cai() RETURNS trigger AS $$
+    DECLARE
+        v_cai autorizaciones_cai%ROWTYPE;
+    BEGIN
+        SELECT * INTO v_cai FROM autorizaciones_cai WHERE id = NEW.cai_id;
+
+        IF NOT v_cai.activo THEN
+            RAISE EXCEPTION 'El CAI % ya no esta activo', v_cai.cai;
+        END IF;
+
+        IF NEW.numero_factura < v_cai.rango_autorizado_inicio
+            OR NEW.numero_factura > v_cai.rango_autorizado_fin THEN
+            RAISE EXCEPTION 'El numero de factura % esta fuera del rango autorizado (% - %) del CAI %',
+                NEW.numero_factura, v_cai.rango_autorizado_inicio, v_cai.rango_autorizado_fin, v_cai.cai;
+        END IF;
+
+        IF date(NEW.fecha_emision) > v_cai.fecha_limite_emision THEN
+            RAISE EXCEPTION 'La fecha de emision % supera la fecha limite de emision (%) autorizada por el CAI',
+                date(NEW.fecha_emision), v_cai.fecha_limite_emision;
+        END IF;
+
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS trg_validar_factura_cai ON facturas;
+    CREATE TRIGGER trg_validar_factura_cai
+    BEFORE INSERT OR UPDATE ON facturas
+    FOR EACH ROW EXECUTE FUNCTION fn_validar_factura_cai();
+
+    CREATE TABLE IF NOT EXISTS factura_detalle(
         id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         factura_id bigint NOT NULL REFERENCES facturas(id) ON DELETE CASCADE,
-        monto numeric(10,2) NOT NULL,
-        metodo_pago metodo_pago NOT NULL,
-        fecha_pago timestamptz NOT NULL DEFAULT now(),
-        registrado_por bigint REFERENCES usuarios(id)
+        tipo tipo_detalle_factura NOT NULL,
+        orden_servicio_id bigint REFERENCES orden_servicio(id),
+        solicitud_repuesto_id bigint REFERENCES solicitudes_repuestos(id),
+        descripcion varchar(200) NOT NULL,
+        cantidad integer NOT NULL DEFAULT 1 CHECK (cantidad > 0),
+        costo_unitario numeric(10,2) NOT NULL CHECK (costo_unitario >= 0),
+        monto_gravado numeric(10,2) GENERATED ALWAYS AS (cantidad * costo_unitario) STORED,
+        CONSTRAINT factura_detalle_origen_valido CHECK (
+            (tipo = 'servicio' AND orden_servicio_id IS NOT NULL AND solicitud_repuesto_id IS NULL)
+            OR
+            (tipo = 'repuesto' AND solicitud_repuesto_id IS NOT NULL AND orden_servicio_id IS NULL)
+        )
     );
 
-    CREATE TABLE IF NOT EXISTS tokens_recuperacion(
-        id SERIAL PRIMARY KEY,
-        email varchar(150) NOT NULL,
-        token varchar(255) NOT NULL,
-        expires_at timestamptz NOT NULL,
-        used boolean NOT NULL DEFAULT false,
-        created_at timestamptz NOT NULL DEFAULT now()
-    );
+    CREATE INDEX IF NOT EXISTS factura_detalle_factura_idx ON factura_detalle(factura_id);
+    CREATE INDEX IF NOT EXISTS factura_detalle_orden_servicio_idx ON factura_detalle(orden_servicio_id);
+    CREATE INDEX IF NOT EXISTS factura_detalle_solicitud_repuesto_idx ON factura_detalle(solicitud_repuesto_id);
+
+    CREATE OR REPLACE FUNCTION fn_recalcular_subtotal_factura() RETURNS trigger AS $$
+    DECLARE
+        v_factura_id bigint;
+    BEGIN
+        v_factura_id := COALESCE(NEW.factura_id, OLD.factura_id);
+
+        UPDATE facturas
+        SET subtotal_gravado_15 = COALESCE(
+            (SELECT SUM(monto_gravado) FROM factura_detalle WHERE factura_id = v_factura_id), 0)
+        WHERE id = v_factura_id;
+
+        RETURN NULL;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS trg_recalcular_subtotal_factura ON factura_detalle;
+    CREATE TRIGGER trg_recalcular_subtotal_factura
+    AFTER INSERT OR UPDATE OR DELETE ON factura_detalle
+    FOR EACH ROW EXECUTE FUNCTION fn_recalcular_subtotal_factura();
+
+    CREATE OR REPLACE FUNCTION fn_generar_factura_al_entregar() RETURNS trigger AS $$
+    DECLARE
+        v_cai autorizaciones_cai%ROWTYPE;
+        v_ultimo_numero varchar(19);
+        v_nuevo_numero varchar(19);
+        v_correlativo bigint;
+        v_cliente clientes%ROWTYPE;
+        v_cliente_nombre varchar(300);
+        v_cliente_direccion text;
+        v_factura_id bigint;
+    BEGIN
+        IF NEW.estado <> 'entregado' OR OLD.estado = 'entregado' THEN
+            RETURN NEW;
+        END IF;
+
+        IF EXISTS (SELECT 1 FROM facturas WHERE orden_id = NEW.numero_orden) THEN
+            RETURN NEW;
+        END IF;
+
+        SELECT * INTO v_cai
+        FROM autorizaciones_cai
+        WHERE activo = true AND fecha_limite_emision >= current_date
+        ORDER BY id DESC
+        LIMIT 1;
+
+        IF v_cai.id IS NULL THEN
+            RAISE EXCEPTION 'No hay un CAI activo y vigente para facturar la orden %', NEW.numero_orden;
+        END IF;
+
+        SELECT numero_factura INTO v_ultimo_numero
+        FROM facturas
+        WHERE cai_id = v_cai.id
+        ORDER BY numero_factura DESC
+        LIMIT 1;
+
+        IF v_ultimo_numero IS NULL THEN
+            v_nuevo_numero := v_cai.rango_autorizado_inicio;
+        ELSE
+            v_correlativo := substring(v_ultimo_numero FROM 12)::bigint + 1;
+            v_nuevo_numero := left(v_ultimo_numero, 11) || lpad(v_correlativo::text, 8, '0');
+        END IF;
+
+        IF v_nuevo_numero > v_cai.rango_autorizado_fin THEN
+            RAISE EXCEPTION 'El CAI % se quedo sin folios disponibles (rango agotado)', v_cai.cai;
+        END IF;
+
+        SELECT c.* INTO v_cliente
+        FROM clientes c
+        JOIN vehiculos veh ON veh.cliente_id = c.id
+        WHERE veh.id = NEW.vehiculo_id;
+
+        v_cliente_nombre := trim(
+            v_cliente.primer_nombre || ' ' || COALESCE(v_cliente.segundo_nombre || ' ', '')
+            || v_cliente.primer_apellido || ' ' || v_cliente.segundo_apellido
+        );
+
+        SELECT concat_ws(', ', d.calle, d.colonia, d.ciudad, d.departamento) INTO v_cliente_direccion
+        FROM direcciones d
+        WHERE d.id = v_cliente.direccion_id;
+
+        INSERT INTO facturas
+            (orden_id, cai_id, numero_factura, cliente_dni, cliente_nombre, cliente_direccion, subtotal_exento, subtotal_gravado_15)
+        VALUES
+            (NEW.numero_orden, v_cai.id, v_nuevo_numero, v_cliente.dni, v_cliente_nombre, v_cliente_direccion, 0, 0)
+        RETURNING id INTO v_factura_id;
+
+        INSERT INTO factura_detalle (factura_id, tipo, orden_servicio_id, descripcion, cantidad, costo_unitario)
+        SELECT v_factura_id, 'servicio', os.id,
+            sc.nombre || COALESCE(': ' || os.observaciones, ''),
+            1, os.precio_aplicado
+        FROM orden_servicio os
+        JOIN servicio_catalogo sc ON sc.id = os.servicio_id
+        WHERE os.orden_id = NEW.numero_orden;
+
+        INSERT INTO factura_detalle (factura_id, tipo, solicitud_repuesto_id, descripcion, cantidad, costo_unitario)
+        SELECT v_factura_id, 'repuesto', sr.id, rp.nombre, sr.cantidad_solicitada, sr.precio_historico
+        FROM solicitudes_repuestos sr
+        JOIN repuestos rp ON rp.id = sr.repuesto_id
+        WHERE sr.orden_id = NEW.numero_orden;
+
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS trg_generar_factura_al_entregar ON ordenes_trabajo;
+    CREATE TRIGGER trg_generar_factura_al_entregar
+    AFTER UPDATE ON ordenes_trabajo
+    FOR EACH ROW
+    WHEN (NEW.estado = 'entregado' AND OLD.estado IS DISTINCT FROM 'entregado')
+    EXECUTE FUNCTION fn_generar_factura_al_entregar();
   `;
 
   try {
     await pool.query(ddl);
-    console.log("Tablas creadas correctamente.");
+    console.log("Tablas y funciones creadas/actualizadas correctamente.");
 
-    // Sembramos los datos de prueba UNA sola vez: si ya hay roles,
-    // asumimos que el resto también ya está sembrado y no insertamos
-    // nada más. Esto evita duplicados en cada reinicio y evita errores
-    // de llave duplicada que tumbarían el servidor completo.
+    // Igual que en el esquema anterior: solo sembramos datos de prueba
+    // UNA vez. Si ya hay roles, asumimos que el resto ya está sembrado.
     const { rows } = await pool.query('SELECT COUNT(*)::int AS total FROM roles');
     if (rows[0].total > 0) {
       console.log("Datos de prueba ya existentes, no se vuelven a sembrar.");
@@ -284,8 +502,7 @@ const setupDatabase = async () => {
       ('recepcionista', 'Atención al cliente y registro de órdenes');
     `);
 
-    // Usuario admin real, con contraseña utilizable (el script original
-    // no traía ningún usuario "admin", solo empleados ficticios).
+    // Usuario admin real, con contraseña utilizable (admin / admin123)
     const hashAdmin = await bcrypt.hash('admin123', 10);
     await pool.query(`
       INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
@@ -293,8 +510,8 @@ const setupDatabase = async () => {
               (SELECT id FROM roles WHERE nombre = 'administrador'), true);
     `, [hashAdmin]);
 
-    // Empleados de ejemplo. OJO: usan hashes de relleno ($2b$10$hash1...),
-    // no contraseñas reales — nadie puede loguearse con estas cuentas
+    // NOTA: estos hashes son de relleno ($2b$10$hash1...), no
+    // contraseñas reales; nadie puede loguearse con estas cuentas
     // hasta que se les asigne un hash bcrypt válido de verdad.
     await pool.query(`
       INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo) VALUES
@@ -400,46 +617,61 @@ const setupDatabase = async () => {
       ('PBH1122', 10,'Grand Vitara',2019,'Verde',   'camioneta', 10);
     `);
 
+    // numero_orden se genera solo (ORD-1, ORD-2, ... en orden de inserción)
     await pool.query(`
-      INSERT INTO ordenes_trabajo (numero_orden, vehiculo_id, mecanico_id, fecha_ingreso, descripcion_problema, estado, prioridad) VALUES
-      ('ORD-0001', 1,  3, '2026-06-01', 'Ruido en el motor al acelerar', 'entregado',    1),
-      ('ORD-0002', 2,  4, '2026-06-03', 'Fallo en el sistema de frenos', 'listo',        2),
-      ('ORD-0003', 3,  5, '2026-06-05', 'No enciende el vehículo',        'en reparacion',3),
-      ('ORD-0004', 4,  7, '2026-06-07', 'Cambio de aceite y filtros',     'recibido',     0),
-      ('ORD-0005', 5,  3, '2026-06-08', 'Aire acondicionado no enfría',   'en reparacion',1),
-      ('ORD-0006', 6,  4, '2026-06-10', 'Revisión de suspensión',         'recibido',     1),
-      ('ORD-0007', 7,  5, '2026-06-11', 'Fuga de aceite en el motor',     'listo',        2),
-      ('ORD-0008', 8,  7, '2026-06-12', 'Cambio de banda de distribución','en reparacion',3),
-      ('ORD-0009', 9,  3, '2026-06-13', 'Revisión eléctrica general',     'entregado',    1),
-      ('ORD-0010', 10, 4, '2026-06-14', 'Alineación y balanceo',          'recibido',     0);
+      INSERT INTO ordenes_trabajo (vehiculo_id, mecanico_id, fecha_ingreso, descripcion_problema, estado, prioridad) VALUES
+      (1,  3, '2026-06-01', 'Ruido en el motor al acelerar', 'entregado',    1),
+      (2,  4, '2026-06-03', 'Fallo en el sistema de frenos', 'listo',        2),
+      (3,  5, '2026-06-05', 'No enciende el vehículo',        'en reparacion',3),
+      (4,  7, '2026-06-07', 'Cambio de aceite y filtros',     'recibido',     0),
+      (5,  3, '2026-06-08', 'Aire acondicionado no enfría',   'en reparacion',1),
+      (6,  4, '2026-06-10', 'Revisión de suspensión',         'recibido',     1),
+      (7,  5, '2026-06-11', 'Fuga de aceite en el motor',     'listo',        2),
+      (8,  7, '2026-06-12', 'Cambio de banda de distribución','en reparacion',3),
+      (9,  3, '2026-06-13', 'Revisión eléctrica general',     'entregado',    1),
+      (10, 4, '2026-06-14', 'Alineación y balanceo',          'recibido',     0);
     `);
 
     await pool.query(`
       INSERT INTO historial_estados_orden (orden_id, estado, notas, usuario_id) VALUES
-      (1, 'recibido',      'Ingreso del vehículo al taller', 2),
-      (1, 'entregado',     'Vehículo entregado al cliente',  2),
-      (2, 'recibido',      'Ingreso del vehículo al taller', 2),
-      (2, 'listo',         'Reparación finalizada',          4),
-      (3, 'en reparacion', 'Diagnóstico eléctrico en curso',  5),
-      (4, 'recibido',      'Ingreso para mantenimiento',      6),
-      (5, 'en reparacion', 'Revisando compresor de A/C',      3),
-      (6, 'recibido',      'Ingreso del vehículo al taller',  6),
-      (7, 'listo',         'Fuga reparada',                   5),
-      (8, 'en reparacion', 'Cambiando banda de distribución', 7);
+      ('ORD-1', 'recibido',      'Ingreso del vehículo al taller', 2),
+      ('ORD-1', 'entregado',     'Vehículo entregado al cliente',  2),
+      ('ORD-2', 'recibido',      'Ingreso del vehículo al taller', 2),
+      ('ORD-2', 'listo',         'Reparación finalizada',          4),
+      ('ORD-3', 'en reparacion', 'Diagnóstico eléctrico en curso',  5),
+      ('ORD-4', 'recibido',      'Ingreso para mantenimiento',      6),
+      ('ORD-5', 'en reparacion', 'Revisando compresor de A/C',      3),
+      ('ORD-6', 'recibido',      'Ingreso del vehículo al taller',  6),
+      ('ORD-7', 'listo',         'Fuga reparada',                   5),
+      ('ORD-8', 'en reparacion', 'Cambiando banda de distribución', 7);
     `);
 
     await pool.query(`
       INSERT INTO diagnosticos (orden_id, descripcion_falla, observaciones, recomendaciones, estado, mecanico_id) VALUES
-      (1, 'Desgaste en soportes de motor',       'Ruido más notorio en frío',       'Reemplazar soportes',            'completado', 3),
-      (2, 'Pastillas de freno desgastadas',      'Espesor menor al mínimo',         'Cambiar pastillas y discos',      'completado', 4),
-      (3, 'Falla en batería y alternador',       'Batería con baja carga',          'Reemplazar batería',              'en proceso', 5),
-      (4, 'Aceite y filtros vencidos',           'Aceite con sedimentos',           'Cambio de aceite sintético',       'pendiente',  7),
-      (5, 'Compresor de A/C dañado',             'Sin presión de gas refrigerante', 'Reemplazar compresor',            'en proceso', 3),
-      (6, 'Amortiguadores desgastados',          'Rebote excesivo en baches',       'Cambiar amortiguadores',           'pendiente',  4),
-      (7, 'Fuga por empaque de cárter',          'Manchas de aceite bajo el motor', 'Cambiar empaque',                 'completado', 5),
-      (8, 'Banda de distribución agrietada',     'Riesgo de rotura inminente',      'Reemplazo inmediato',             'en proceso', 7),
-      (9, 'Corto circuito en panel de luces',    'Fusible quemado repetidamente',   'Revisar cableado completo',        'completado', 3),
-      (10,'Desalineación en eje delantero',      'Desgaste irregular de llantas',   'Alinear y balancear',             'pendiente',  4);
+      ('ORD-1', 'Desgaste en soportes de motor',       'Ruido más notorio en frío',       'Reemplazar soportes',            'completado', 3),
+      ('ORD-2', 'Pastillas de freno desgastadas',      'Espesor menor al mínimo',         'Cambiar pastillas y discos',      'completado', 4),
+      ('ORD-3', 'Falla en batería y alternador',       'Batería con baja carga',          'Reemplazar batería',              'en proceso', 5),
+      ('ORD-4', 'Aceite y filtros vencidos',           'Aceite con sedimentos',           'Cambio de aceite sintético',       'pendiente',  7),
+      ('ORD-5', 'Compresor de A/C dañado',             'Sin presión de gas refrigerante', 'Reemplazar compresor',            'en proceso', 3),
+      ('ORD-6', 'Amortiguadores desgastados',          'Rebote excesivo en baches',       'Cambiar amortiguadores',           'pendiente',  4),
+      ('ORD-7', 'Fuga por empaque de cárter',          'Manchas de aceite bajo el motor', 'Cambiar empaque',                 'completado', 5),
+      ('ORD-8', 'Banda de distribución agrietada',     'Riesgo de rotura inminente',      'Reemplazo inmediato',             'en proceso', 7),
+      ('ORD-9', 'Corto circuito en panel de luces',    'Fusible quemado repetidamente',   'Revisar cableado completo',        'completado', 3),
+      ('ORD-10','Desalineación en eje delantero',      'Desgaste irregular de llantas',   'Alinear y balancear',             'pendiente',  4);
+    `);
+
+    await pool.query(`
+      INSERT INTO evidencias_diagnostico (diagnostico_id, usuario_id, nombre_archivo, ruta_archivo, tipo_archivo, tamano_bytes) VALUES
+      (1,  3, 'soporte_motor_01.jpg',      '/uploads/evidencias/1/soporte_motor_01.jpg',      'jpg',  845210),
+      (2,  4, 'pastillas_freno_01.png',    '/uploads/evidencias/2/pastillas_freno_01.png',    'png',  612340),
+      (3,  5, 'bateria_01.jpg',            '/uploads/evidencias/3/bateria_01.jpg',            'jpg',  733920),
+      (4,  7, 'filtro_aceite_01.jpeg',     '/uploads/evidencias/4/filtro_aceite_01.jpeg',     'jpeg', 540120),
+      (5,  3, 'compresor_ac_01.png',       '/uploads/evidencias/5/compresor_ac_01.png',       'png',  921450),
+      (6,  4, 'amortiguador_01.jpg',       '/uploads/evidencias/6/amortiguador_01.jpg',       'jpg',  678900),
+      (7,  5, 'carter_fuga_01.webp',       '/uploads/evidencias/7/carter_fuga_01.webp',       'webp', 455600),
+      (8,  7, 'banda_distribucion_01.jpg', '/uploads/evidencias/8/banda_distribucion_01.jpg', 'jpg',  702340),
+      (9,  3, 'panel_luces_01.png',        '/uploads/evidencias/9/panel_luces_01.png',        'png',  389750),
+      (10, 4, 'llanta_desgaste_01.jpg',    '/uploads/evidencias/10/llanta_desgaste_01.jpg',   'jpg',  812430);
     `);
 
     await pool.query(`
@@ -449,17 +681,17 @@ const setupDatabase = async () => {
     `);
 
     await pool.query(`
-      INSERT INTO repuestos (codigo, nombre, categoria_id, precio_unitario) VALUES
-      ('REP-001', 'Pastillas de freno delanteras', 1, 850.00),
-      ('REP-002', 'Disco de freno',                1, 1200.00),
-      ('REP-003', 'Soporte de motor',              2, 650.00),
-      ('REP-004', 'Batería 12V',                   4, 2500.00),
-      ('REP-005', 'Filtro de aceite',              7, 180.00),
-      ('REP-006', 'Filtro de aire',                7, 220.00),
-      ('REP-007', 'Amortiguador delantero',        3, 1450.00),
-      ('REP-008', 'Compresor de A/C',              4, 4200.00),
-      ('REP-009', 'Banda de distribución',         5, 980.00),
-      ('REP-010', 'Aceite sintético 5W-30 (galón)',10, 750.00);
+      INSERT INTO repuestos (codigo, nombre, categoria_id, costo_unitario, precio_unitario) VALUES
+      ('REP-001', 'Pastillas de freno delanteras', 1, 500.00,  850.00),
+      ('REP-002', 'Disco de freno',                1, 700.00,  1200.00),
+      ('REP-003', 'Soporte de motor',              2, 380.00,  650.00),
+      ('REP-004', 'Batería 12V',                   4, 1600.00, 2500.00),
+      ('REP-005', 'Filtro de aceite',              7, 100.00,  180.00),
+      ('REP-006', 'Filtro de aire',                7, 120.00,  220.00),
+      ('REP-007', 'Amortiguador delantero',        3, 850.00,  1450.00),
+      ('REP-008', 'Compresor de A/C',              4, 2600.00, 4200.00),
+      ('REP-009', 'Banda de distribución',         5, 580.00,  980.00),
+      ('REP-010', 'Aceite sintético 5W-30 (galón)',10, 450.00,  750.00);
     `);
 
     await pool.query(`
@@ -470,58 +702,85 @@ const setupDatabase = async () => {
 
     await pool.query(`
       INSERT INTO movimientos_inventario (repuesto_id, tipo_movimiento, cantidad, motivo, orden_id, usuario_id) VALUES
-      (1, 'salida',  2, 'Uso en orden de trabajo',     2, 4),
-      (2, 'salida',  2, 'Uso en orden de trabajo',     2, 4),
-      (3, 'salida',  2, 'Uso en orden de trabajo',     1, 3),
-      (4, 'salida',  1, 'Uso en orden de trabajo',     3, 5),
-      (5, 'salida',  1, 'Uso en orden de trabajo',     4, 7),
-      (6, 'salida',  1, 'Uso en orden de trabajo',     4, 7),
-      (8, 'salida',  1, 'Uso en orden de trabajo',     5, 3),
-      (9, 'salida',  1, 'Uso en orden de trabajo',     8, 7),
+      (1, 'salida',  2, 'Uso en orden de trabajo',     'ORD-2', 4),
+      (2, 'salida',  2, 'Uso en orden de trabajo',     'ORD-2', 4),
+      (3, 'salida',  2, 'Uso en orden de trabajo',     'ORD-1', 3),
+      (4, 'salida',  1, 'Uso en orden de trabajo',     'ORD-3', 5),
+      (5, 'salida',  1, 'Uso en orden de trabajo',     'ORD-4', 7),
+      (6, 'salida',  1, 'Uso en orden de trabajo',     'ORD-4', 7),
+      (8, 'salida',  1, 'Uso en orden de trabajo',     'ORD-5', 3),
+      (9, 'salida',  1, 'Uso en orden de trabajo',     'ORD-8', 7),
       (10,'entrada', 20,'Compra a proveedor',          NULL, 8),
       (1, 'entrada', 15,'Compra a proveedor',          NULL, 8);
     `);
 
     await pool.query(`
-      INSERT INTO solicitudes_repuestos (orden_id, repuesto_id, cantidad_solicitada, precio_historico, mecanico_id) VALUES
-      (1, 3,  2, 650.00,  3),
-      (2, 1,  2, 850.00,  4),
-      (2, 2,  2, 1200.00, 4),
-      (3, 4,  1, 2500.00, 5),
-      (4, 5,  1, 180.00,  7),
-      (4, 6,  1, 220.00,  7),
-      (4, 10, 4, 750.00,  7),
-      (5, 8,  1, 4200.00, 3),
-      (7, 3,  1, 650.00,  5),
-      (8, 9,  1, 980.00,  7);
+      INSERT INTO solicitudes_repuestos (orden_id, repuesto_id, cantidad_solicitada, costo_historico, precio_historico, mecanico_id) VALUES
+      ('ORD-1', 3,  2, 380.00,  650.00,  3),
+      ('ORD-2', 1,  2, 500.00,  850.00,  4),
+      ('ORD-2', 2,  2, 700.00,  1200.00, 4),
+      ('ORD-3', 4,  1, 1600.00, 2500.00, 5),
+      ('ORD-4', 5,  1, 100.00,  180.00,  7),
+      ('ORD-4', 6,  1, 120.00,  220.00,  7),
+      ('ORD-4', 10, 4, 450.00,  750.00,  7),
+      ('ORD-5', 8,  1, 2600.00, 4200.00, 3),
+      ('ORD-7', 3,  1, 380.00,  650.00,  5),
+      ('ORD-8', 9,  1, 580.00,  980.00,  7);
     `);
 
     await pool.query(`
-      INSERT INTO servicio_catalogo (nombre, descripcion, precio_base) VALUES
-      ('Cambio de aceite',              'Cambio de aceite y filtro',                       450.00),
-      ('Alineación',                    'Alineación de las 4 ruedas',                      500.00),
-      ('Balanceo',                      'Balanceo de neumáticos',                          350.00),
-      ('Servicio de frenos',            'Revisión y cambio de pastillas/discos',           900.00),
-      ('Afinación de motor',            'Revisión general del motor',                      1500.00),
-      ('Diagnóstico computarizado',     'Escaneo electrónico del vehículo',                600.00),
-      ('Cambio de banda de distribución','Reemplazo de banda y revisión de tensores',      1800.00),
-      ('Reparación de motor',           'Reparación mayor de componentes internos',        5000.00),
-      ('Cambio de llantas',             'Montaje y desmontaje de neumáticos',              300.00),
-      ('Revisión eléctrica',            'Diagnóstico del sistema eléctrico completo',      700.00);
+      INSERT INTO servicio_catalogo (id, nombre, descripcion, precio_base) VALUES
+      (1,  'Cambio de aceite',              'Cambio de aceite y filtro',                       450.00),
+      (2,  'Alineación',                    'Alineación de las 4 ruedas',                      500.00),
+      (3,  'Balanceo',                      'Balanceo de neumáticos',                          350.00),
+      (4,  'Servicio de frenos',            'Revisión y cambio de pastillas/discos',           900.00),
+      (5,  'Afinación de motor',            'Revisión general del motor',                      1500.00),
+      (6,  'Diagnóstico computarizado',     'Escaneo electrónico del vehículo',                600.00),
+      (7,  'Cambio de banda de distribución','Reemplazo de banda y revisión de tensores',      1800.00),
+      (8,  'Reparación de motor',           'Reparación mayor de componentes internos',        5000.00),
+      (9,  'Cambio de llantas',             'Montaje y desmontaje de neumáticos',              300.00),
+      (10, 'Revisión eléctrica',            'Diagnóstico del sistema eléctrico completo',      700.00);
     `);
+
+    await pool.query(`SELECT setval(pg_get_serial_sequence('servicio_catalogo','id'), 10, true);`);
 
     await pool.query(`
       INSERT INTO orden_servicio (orden_id, servicio_id, tiempo_empleado_minutos, observaciones, precio_aplicado) VALUES
-      (1, 5,  120, 'Afinación completa por ruido de motor',        1500.00),
-      (2, 4,  90,  'Cambio de pastillas y discos delanteros',      900.00),
-      (3, 6,  45,  'Escaneo para verificar falla eléctrica',       600.00),
-      (4, 1,  30,  'Cambio de aceite de rutina',                   450.00),
-      (5, 10, 60,  'Revisión de sistema de A/C',                   700.00),
-      (6, 2,  40,  'Alineación por desgaste irregular',            500.00),
-      (7, 8,  180, 'Reparación de fuga en cárter',                 5000.00),
-      (8, 7,  150, 'Reemplazo urgente de banda de distribución',   1800.00),
-      (9, 10, 50,  'Revisión eléctrica del panel de luces',        700.00),
-      (10,3,  30,  'Balanceo tras alineación',                     350.00);
+      ('ORD-1', 5,  120, 'Afinación completa por ruido de motor',        1500.00),
+      ('ORD-2', 4,  90,  'Cambio de pastillas y discos delanteros',      900.00),
+      ('ORD-3', 6,  45,  'Escaneo para verificar falla eléctrica',       600.00),
+      ('ORD-4', 1,  30,  'Cambio de aceite de rutina',                   450.00),
+      ('ORD-5', 10, 60,  'Revisión de sistema de A/C',                   700.00),
+      ('ORD-6', 2,  40,  'Alineación por desgaste irregular',            500.00),
+      ('ORD-7', 8,  180, 'Reparación de fuga en cárter',                 5000.00),
+      ('ORD-8', 7,  150, 'Reemplazo urgente de banda de distribución',   1800.00),
+      ('ORD-9', 10, 50,  'Revisión eléctrica del panel de luces',        700.00),
+      ('ORD-10',3,  30,  'Balanceo tras alineación',                     350.00);
+    `);
+
+    await pool.query(`
+      INSERT INTO autorizaciones_cai (cai, punto_emision, rango_autorizado_inicio, rango_autorizado_fin, fecha_limite_emision) VALUES
+      ('85FDAH-789ABC-DEF012-345678-9ABCDE-F12345-B9', '000-001-01', '000-001-01-00005458', '000-001-01-00010000', '2026-12-31');
+    `);
+
+    // ORD-1 y ORD-9 se insertaron directo como 'entregado' (no vía UPDATE),
+    // así que el trigger trg_generar_factura_al_entregar no se disparó;
+    // se simula aquí el resultado que el trigger habría generado solo.
+    await pool.query(`
+      INSERT INTO facturas (orden_id, cai_id, numero_factura, cliente_dni, cliente_nombre, cliente_direccion, metodo_pago, subtotal_exento, subtotal_gravado_15, fecha_emision) VALUES
+      ('ORD-1', 1, '000-001-01-00005458', '0501199012345', 'Pedro Hernandez Reyes', 'Bo. El Centro, 2da Ave, El Centro, Choluteca, Choluteca', 'tarjeta',  0, 0, '2026-06-02'),
+      ('ORD-9', 1, '000-001-01-00005459', '0401200187654', 'Oscar Chavez Rodas',    'Col. Las Palmas, Las Palmas, La Ceiba, Atlántida',       'efectivo', 0, 0, '2026-06-14');
+    `);
+
+    await pool.query(`
+      INSERT INTO factura_detalle (factura_id, tipo, orden_servicio_id, descripcion, cantidad, costo_unitario) VALUES
+      (1, 'servicio', 1, 'Afinación de motor: revisión general del motor', 1, 1500.00),
+      (2, 'servicio', 9, 'Revisión eléctrica: diagnóstico del sistema eléctrico completo', 1, 700.00);
+    `);
+
+    await pool.query(`
+      INSERT INTO factura_detalle (factura_id, tipo, solicitud_repuesto_id, descripcion, cantidad, costo_unitario) VALUES
+      (1, 'repuesto', 1, 'Soporte de motor', 2, 650.00);
     `);
 
     console.log("Datos de prueba sembrados correctamente.");

@@ -1,155 +1,145 @@
-const db = require('../config/db');
+const Diagnostico = class Diagnostico {
+  constructor({
+    id,
+    orden_id,
+    descripcion_falla,
+    observaciones,
+    recomendaciones,
+    estado,
+    mecanico_id,
+    mecanico,
+    fecha_registro,
+    fecha_actualizacion
+  } = {}) {
+    this.id = id;
+    this.orden_id = orden_id;
+    this.descripcion_falla = descripcion_falla;
+    this.observaciones = observaciones;
+    this.recomendaciones = recomendaciones;
+    this.estado = estado || 'pendiente';
+    this.mecanico_id = mecanico_id;
+    this.mecanico = mecanico;
+    this.fecha_registro = fecha_registro || new Date();
+    this.fecha_actualizacion = fecha_actualizacion || new Date();
+  }
 
-class Diagnostico {
+  static get ESTADOS_VALIDOS() {
+    return ['pendiente', 'en proceso', 'completado'];
+  }
 
-    static async ordenExiste(ordenId) {
-        const result = await db.query(
-            'SELECT id FROM ordenes_trabajo WHERE id = $1',
-            [ordenId]
-        );
-        return !!result.rows[0];
+  get esta_pendiente() {
+    return this.estado === 'pendiente';
+  }
+
+  get esta_en_proceso() {
+    return this.estado === 'en proceso';
+  }
+
+  get esta_completado() {
+    return this.estado === 'completado';
+  }
+
+  get tiene_observaciones() {
+    return !!this.observaciones && this.observaciones.trim().length > 0;
+  }
+
+  get tiene_recomendaciones() {
+    return !!this.recomendaciones && this.recomendaciones.trim().length > 0;
+  }
+
+  cambiarEstado(nuevoEstado) {
+    if (!Diagnostico.ESTADOS_VALIDOS.includes(nuevoEstado)) {
+      throw new Error(`Estado inválido. Estados válidos: ${Diagnostico.ESTADOS_VALIDOS.join(', ')}`);
     }
 
-    static async findAll({ estado, q, orden_id, orden = 'desc' } = {}) {
-        const condiciones = [];
-        const values = [];
-        let index = 1;
+    const estadoAnterior = this.estado;
+    this.estado = nuevoEstado;
+    this.fecha_actualizacion = new Date();
 
-        if (estado) {
-            condiciones.push(`d.estado = $${index++}`);
-            values.push(estado);
-        }
+    return {
+      estadoAnterior,
+      estadoNuevo: nuevoEstado
+    };
+  }
 
-        if (orden_id) {
-            condiciones.push(`d.orden_id = $${index++}`);
-            values.push(orden_id);
-        }
-
-        if (q) {
-            condiciones.push(`(
-                d.descripcion_falla ILIKE $${index}
-                OR d.observaciones ILIKE $${index}
-                OR d.recomendaciones ILIKE $${index}
-            )`);
-            values.push(`%${q}%`);
-            index++;
-        }
-
-        const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
-        const direccion = orden.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
-
-        const result = await db.query(`
-            SELECT
-                d.*,
-                u.nombre_completo AS mecanico
-            FROM diagnosticos d
-            LEFT JOIN usuarios u ON d.mecanico_id = u.id
-            ${where}
-            ORDER BY d.fecha_registro ${direccion}
-        `, values);
-
-        return result.rows;
+  agregarObservaciones(observaciones) {
+    if (!observaciones || !observaciones.trim()) {
+      throw new Error('Las observaciones no pueden estar vacías');
     }
+    this.observaciones = observaciones.trim();
+    this.fecha_actualizacion = new Date();
+  }
 
-    static async findById(id) {
-        const result = await db.query(`
-            SELECT
-                d.*,
-                u.nombre_completo AS mecanico
-            FROM diagnosticos d
-            LEFT JOIN usuarios u ON d.mecanico_id = u.id
-            WHERE d.id = $1
-        `, [id]);
-
-        return result.rows[0] || null;
+  agregarRecomendaciones(recomendaciones) {
+    if (recomendaciones && recomendaciones.trim()) {
+      this.recomendaciones = recomendaciones.trim();
+      this.fecha_actualizacion = new Date();
     }
+  }
 
-    static async findByOrden(ordenId) {
-        const result = await db.query(`
-            SELECT
-                d.*,
-                u.nombre_completo AS mecanico
-            FROM diagnosticos d
-            LEFT JOIN usuarios u ON d.mecanico_id = u.id
-            WHERE d.orden_id = $1
-            ORDER BY d.fecha_registro DESC
-        `, [ordenId]);
+  asignarMecanico(mecanico_id) {
+    this.mecanico_id = mecanico_id;
+    this.fecha_actualizacion = new Date();
+  }
 
-        return result.rows;
-    }
+  estaCompleto() {
+    return this.estado === 'completado' && this.descripcion_falla && this.descripcion_falla.trim().length > 0;
+  }
 
-    static async create({ orden_id, descripcion_falla, observaciones, recomendaciones, estado, mecanico_id }) {
-        const result = await db.query(`
-            INSERT INTO diagnosticos
-                (orden_id, descripcion_falla, observaciones, recomendaciones, estado, mecanico_id)
-            VALUES ($1, $2, $3, $4, COALESCE($5::estado_diagnostico, 'pendiente'), $6)
-            RETURNING *
-        `, [
-            orden_id,
-            descripcion_falla,
-            observaciones || null,
-            recomendaciones || null,
-            estado || null,
-            mecanico_id || null
-        ]);
+  toJSON() {
+    return {
+      id: this.id,
+      orden_id: this.orden_id,
+      descripcion_falla: this.descripcion_falla,
+      observaciones: this.observaciones,
+      recomendaciones: this.recomendaciones,
+      estado: this.estado,
+      mecanico_id: this.mecanico_id,
+      mecanico: this.mecanico,
+      fecha_registro: this.fecha_registro,
+      fecha_actualizacion: this.fecha_actualizacion
+    };
+  }
 
-        return result.rows[0];
-    }
+  toDatabase() {
+    return {
+      id: this.id,
+      orden_id: this.orden_id,
+      descripcion_falla: this.descripcion_falla,
+      observaciones: this.observaciones,
+      recomendaciones: this.recomendaciones,
+      estado: this.estado,
+      mecanico_id: this.mecanico_id,
+      fecha_registro: this.fecha_registro,
+      fecha_actualizacion: this.fecha_actualizacion
+    };
+  }
 
-    static async update(id, data) {
-        const fields = [];
-        const values = [];
-        let index = 1;
+  static fromDatabase(data) {
+    return new Diagnostico({
+      id: data.id,
+      orden_id: data.orden_id,
+      descripcion_falla: data.descripcion_falla,
+      observaciones: data.observaciones,
+      recomendaciones: data.recomendaciones,
+      estado: data.estado,
+      mecanico_id: data.mecanico_id,
+      mecanico: data.mecanico,
+      fecha_registro: data.fecha_registro,
+      fecha_actualizacion: data.fecha_actualizacion
+    });
+  }
 
-        if (data.descripcion_falla !== undefined) {
-            fields.push(`descripcion_falla = $${index++}`);
-            values.push(data.descripcion_falla);
-        }
-        if (data.recomendaciones !== undefined) {
-            fields.push(`recomendaciones = $${index++}`);
-            values.push(data.recomendaciones);
-        }
-        if (data.observaciones !== undefined) {
-            fields.push(`observaciones = $${index++}`);
-            values.push(data.observaciones);
-        }
-
-        if (fields.length === 0) return await this.findById(id);
-
-        fields.push('fecha_actualizacion = now()');
-        values.push(id);
-
-        const result = await db.query(`
-            UPDATE diagnosticos
-            SET ${fields.join(', ')}
-            WHERE id = $${index}
-            RETURNING *
-        `, values);
-
-        return result.rows[0] || null;
-    }
-
-    static async updateObservaciones(id, observaciones) {
-        const result = await db.query(`
-            UPDATE diagnosticos
-            SET observaciones = $1, fecha_actualizacion = now()
-            WHERE id = $2
-            RETURNING *
-        `, [observaciones, id]);
-
-        return result.rows[0] || null;
-    }
-
-    static async updateEstado(id, estado) {
-        const result = await db.query(`
-            UPDATE diagnosticos
-            SET estado = $1, fecha_actualizacion = now()
-            WHERE id = $2
-            RETURNING *
-        `, [estado, id]);
-
-        return result.rows[0] || null;
-    }
-}
+  static forCreation(data) {
+    return new Diagnostico({
+      orden_id: data.orden_id,
+      descripcion_falla: data.descripcion_falla,
+      observaciones: data.observaciones || null,
+      recomendaciones: data.recomendaciones || null,
+      estado: data.estado || 'pendiente',
+      mecanico_id: data.mecanico_id || null
+    });
+  }
+};
 
 module.exports = Diagnostico;

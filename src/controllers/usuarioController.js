@@ -1,84 +1,80 @@
-const Usuario = require('../models/Usuario');
+const UsuarioService = require('../services/usuario.service');
+
 const getUsuarios = async (req, res) => {
   try {
-    const usuarios = await Usuario.findAll();
-    res.json({ success: true, data: usuarios });
+    const result = await UsuarioService.getAll();
+    res.json(result);
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ success: false, message: 'Error al obtener usuarios' });
+    console.error('Error en getUsuarios:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener usuarios'
+    });
   }
 };
 
 const getUsuarioById = async (req, res) => {
   try {
     const { id } = req.params;
-    const usuario = await Usuario.findById(id);
-
-    if (!usuario) {
-      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+    const result = await UsuarioService.getById(id);
+    
+    if (!result.success) {
+      return res.status(404).json(result);
     }
-
-    res.json({ success: true, data: usuario });
+    
+    res.json(result);
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ success: false, message: 'Error al obtener usuario' });
+    console.error('Error en getUsuarioById:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener usuario'
+    });
   }
 };
+
 const createUsuario = async (req, res) => {
   try {
-    const { nombre_completo, nombre_usuario, correo, contrasena, rol_id } = req.body;
-    if (!nombre_completo || !nombre_usuario || !correo || !contrasena) {
-      return res.status(400).json({
-        success: false,
-        message: 'Todos los campos son obligatorios'
-      });
+    const result = await UsuarioService.create(req.body);
+    
+    if (!result.success) {
+      const validationErrors = [
+        'Todos los campos son obligatorios',
+        'El campo nombre_usuario es obligatorio',
+        'El campo correo es obligatorio',
+        'El campo contrasena es obligatorio',
+        'El nombre de usuario ya existe',
+        'El correo ya está registrado'
+      ];
+      const status = validationErrors.some(msg => result.message && result.message.includes(msg)) ? 400 : 500;
+      return res.status(status).json(result);
     }
-
-    const usuario = await Usuario.create({
-      nombre_completo,
-      nombre_usuario,
-      correo,
-      contrasena,
-      rol_id: rol_id || 3
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Usuario creado correctamente',
-      data: usuario
-    });
-
+    
+    res.status(201).json(result);
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ success: false, message: 'Error al crear usuario' });
+    console.error('Error en createUsuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al crear usuario'
+    });
   }
 };
+
 const updateUsuario = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre_completo, correo, contrasena, rol_id } = req.body;
-
-    const usuario = await Usuario.findById(id);
-    if (!usuario) {
-      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+    const result = await UsuarioService.update(id, req.body);
+    
+    if (!result.success) {
+      return res.status(404).json(result);
     }
-
-    const updated = await Usuario.update(id, {
-  nombre_completo: nombre_completo || usuario.nombre_completo,
-  correo: correo || usuario.correo,
-  contrasena,
-  rol_id: rol_id || usuario.rol_id
-});
-
-    res.json({
-      success: true,
-      message: 'Usuario actualizado',
-      data: updated
-    });
-
+    
+    res.json(result);
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ success: false, message: 'Error al actualizar usuario' });
+    console.error('Error en updateUsuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al actualizar usuario'
+    });
   }
 };
 
@@ -86,45 +82,39 @@ const toggleEstado = async (req, res) => {
   try {
     const { id } = req.params;
     const { activo } = req.body;
-
-    if (activo === undefined) {
-      return res.status(400).json({ success: false, message: 'El campo activo es obligatorio' });
+    
+    const result = await UsuarioService.toggleStatus(id, activo);
+    
+    if (!result.success) {
+      return res.status(404).json(result);
     }
-
-    const usuario = await Usuario.toggleStatus(id, activo);
-
-    if (!usuario) {
-      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
-    }
-
-    res.json({
-      success: true,
-      message: `Usuario ${activo ? 'activado' : 'desactivado'}`,
-      data: usuario
-    });
-
+    
+    res.json(result);
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ success: false, message: 'Error al cambiar estado' });
+    console.error('Error en toggleEstado:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al cambiar estado del usuario'
+    });
   }
 };
 
 const deleteUsuario = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const usuario = await Usuario.findById(id);
-    if (!usuario) {
-      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+    const result = await UsuarioService.delete(id);
+    
+    if (!result.success) {
+      return res.status(404).json(result);
     }
-
-    await Usuario.delete(id);
-
-    res.json({ success: true, message: 'Usuario eliminado' });
-
+    
+    res.json(result);
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ success: false, message: 'Error al eliminar usuario' });
+    console.error('Error en deleteUsuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al eliminar usuario'
+    });
   }
 };
 

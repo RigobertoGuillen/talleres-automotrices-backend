@@ -3,16 +3,11 @@ const app = require('../src/app');
 const pool = require('../src/config/db');
 
 describe('Clientes Endpoints', () => {
-
   let token;
   let clienteId;
 
   beforeAll(async () => {
-
-    await pool.query(
-      `DELETE FROM clientes WHERE dni = $1`,
-      ['0801199988888']
-    );
+    await pool.query(`DELETE FROM clientes WHERE dni = $1`, ['0801199988888']);
 
     const response = await request(app)
       .post('/api/auth/login')
@@ -24,20 +19,24 @@ describe('Clientes Endpoints', () => {
     token = response.body.token;
 
     if (!token) {
-      throw new Error(
-        'No se pudo obtener el token: ' +
-        JSON.stringify(response.body)
-      );
+      throw new Error('No se pudo obtener el token: ' + JSON.stringify(response.body));
     }
-
   });
 
   afterAll(async () => {
-    await pool.end();
+    try {
+      if (clienteId) {
+        await pool.query('DELETE FROM vehiculos WHERE cliente_id = $1', [clienteId]);
+        await pool.query('DELETE FROM clientes WHERE id = $1', [clienteId]);
+      }
+    } catch (error) {
+      console.error('Error limpiando datos:', error.message);
+    } finally {
+      await pool.end();
+    }
   });
 
   test('POST /api/clientes - deberia crear un cliente', async () => {
-
     const response = await request(app)
       .post('/api/clientes')
       .set('Authorization', `Bearer ${token}`)
@@ -64,44 +63,36 @@ describe('Clientes Endpoints', () => {
     expect(response.body.data.primer_apellido).toBe('Perez');
 
     clienteId = response.body.data.id;
-
   });
 
   test('GET /api/clientes - deberia listar clientes', async () => {
-
     const response = await request(app)
       .get('/api/clientes')
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(Array.isArray(response.body.data)).toBe(true);
-
   });
 
   test('GET /api/clientes/buscar - deberia buscar por nombre', async () => {
-
     const response = await request(app)
       .get('/api/clientes/buscar?q=Juan')
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(Array.isArray(response.body.data)).toBe(true);
-
   });
 
   test('GET /api/clientes/:id - deberia obtener un cliente', async () => {
-
     const response = await request(app)
       .get(`/api/clientes/${clienteId}`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(response.body.data.id).toBe(clienteId);
-
   });
 
   test('PUT /api/clientes/:id - deberia editar un cliente', async () => {
-
     const response = await request(app)
       .put(`/api/clientes/${clienteId}`)
       .set('Authorization', `Bearer ${token}`)
@@ -112,11 +103,9 @@ describe('Clientes Endpoints', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.telefono).toBe('8888-8888');
-
   });
 
   test('GET /api/clientes/:id/historial - deberia obtener historial', async () => {
-
     const response = await request(app)
       .get(`/api/clientes/${clienteId}/historial`)
       .set('Authorization', `Bearer ${token}`);
@@ -124,11 +113,9 @@ describe('Clientes Endpoints', () => {
     expect(response.status).toBe(200);
     expect(response.body.data).toHaveProperty('cliente');
     expect(response.body.data).toHaveProperty('historial');
-
   });
 
   test('DELETE /api/clientes/:id - deberia eliminar un cliente', async () => {
-
     const response = await request(app)
       .delete(`/api/clientes/${clienteId}`)
       .set('Authorization', `Bearer ${token}`);
@@ -136,16 +123,10 @@ describe('Clientes Endpoints', () => {
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
 
-  });
-
-  test('GET /api/clientes/:id - deberia devolver 404 despues de eliminar', async () => {
-
-    const response = await request(app)
+    const verifyResponse = await request(app)
       .get(`/api/clientes/${clienteId}`)
       .set('Authorization', `Bearer ${token}`);
 
-    expect(response.status).toBe(404);
-
+    expect(verifyResponse.status).toBe(404);
   });
-
 });

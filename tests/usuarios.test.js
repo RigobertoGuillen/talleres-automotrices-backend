@@ -1,19 +1,13 @@
 const request = require('supertest');
 const app = require('../src/app');
-const db = require('../src/config/db');
-const JWT_SECRET = require('../src/config/jwt');
+const pool = require('../src/config/db');
 
 describe('Usuarios Endpoints', () => {
   let token;
+  let usuarioId;
 
   beforeAll(async () => {
-    // Limpiamos residuos de ejecuciones anteriores
-    await db.query("DELETE FROM usuarios WHERE nombre_usuario = 'juan'");
-
-    // El usuario admin ya lo crea el globalSetup (ver tests/setup.js),
-    // así que solo necesitamos loguearnos una vez. No borramos ni
-    // recreamos el admin aquí: eso invalidaba el token (el id cambiaba
-    // al reinsertar el usuario) y provocaba 401 en cascada.
+    await pool.query("DELETE FROM usuarios WHERE nombre_usuario LIKE 'test_%'");
     const response = await request(app)
       .post('/api/auth/login')
       .send({
@@ -24,11 +18,15 @@ describe('Usuarios Endpoints', () => {
     token = response.body.token;
 
     if (!token) {
-      throw new Error(
-        'No se pudo obtener el token en el setup de usuarios.test.js: ' +
-        JSON.stringify(response.body)
-      );
+      throw new Error('No se pudo obtener el token: ' + JSON.stringify(response.body));
     }
+  });
+
+  afterAll(async () => {
+    if (usuarioId) {
+      await pool.query('DELETE FROM usuarios WHERE id = $1', [usuarioId]);
+    }
+    await pool.end();
   });
 
   test('GET /api/usuarios - debería devolver lista de usuarios', async () => {
@@ -50,22 +48,24 @@ describe('Usuarios Endpoints', () => {
   });
 
   test('POST /api/usuarios - debería crear un usuario', async () => {
-    const usuarioUnico = `juan_${Date.now()}`;
+    const nombreUnico = `test_${Date.now()}`;
 
     const response = await request(app)
       .post('/api/usuarios')
       .set('Authorization', `Bearer ${token}`)
       .send({
         nombre_completo: 'Juan Pérez',
-        nombre_usuario: usuarioUnico,
+        nombre_usuario: nombreUnico,
         correo: `juan_${Date.now()}@sigta.com`,
         contrasena: 'juan123',
-        rol_id: 1
+        rol_id: 3
       });
 
     expect(response.status).toBe(201);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('nombre_usuario', usuarioUnico);
+    expect(response.body.data.nombre_usuario).toBe(nombreUnico);
+
+    usuarioId = response.body.data.id;
   });
 
   test('POST /api/usuarios - debería devolver 400 con datos incompletos', async () => {
@@ -80,7 +80,31 @@ describe('Usuarios Endpoints', () => {
     expect(response.body.success).toBe(false);
   });
 
-  afterAll(async () => {
-    await db.end();
+  test('GET /api/usuarios/:id - debería obtener un usuario por ID', async () => {
+    const response = await request(app)
+      .get(`/api/usuarios/${usuarioId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.id).toBe(usuarioId);
+  });
+
+  test('PATCH /api/usuarios/:id/estado - debería desactivar un usuario', async () => {
+    const response = await request(app)
+      .patch(`/api/usuarios/${usuarioId}/estado`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ activo: false });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.activo).toBe(false);
+  });
+
+  test('DELETE /api/usuarios/:id - debería eliminar un usuario', async () => {
+    const response = await request(app)
+      .delete(`/api/usuarios/${usuarioId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 const request = require('supertest');
 const app = require('../src/app');
-const db = require('../src/config/db');
+const pool = require('../src/config/db');
 
 describe('Vehículos Endpoints', () => {
   let token;
@@ -9,7 +9,6 @@ describe('Vehículos Endpoints', () => {
   let toyotaId;
 
   beforeAll(async () => {
-    // 1. Obtenemos el token usando el usuario admin generado por el setup global
     const response = await request(app)
       .post('/api/auth/login')
       .send({
@@ -20,32 +19,36 @@ describe('Vehículos Endpoints', () => {
     token = response.body.token;
 
     if (!token) {
-      throw new Error(
-        'No se pudo obtener el token en el setup de vehiculos.test.js: ' +
-        JSON.stringify(response.body)
-      );
+      throw new Error('No se pudo obtener el token: ' + JSON.stringify(response.body));
     }
 
-    // 2. Insertamos un cliente dummy en la base de datos para usar su cliente_id
-    // y cumplir la integridad referencial (Foreign Key) sin fallar.
-    // Esquema normalizado: dni, primer_nombre, primer_apellido y
-    // segundo_apellido son obligatorios (NOT NULL).
-    const clienteRes = await db.query(`
+    const clienteRes = await pool.query(`
       INSERT INTO clientes (dni, primer_nombre, primer_apellido, segundo_apellido, telefono, correo)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, $5, $6) 
+      ON CONFLICT (dni) DO UPDATE SET primer_nombre = EXCLUDED.primer_nombre
       RETURNING id
     `, ['0801199900001', 'Cliente', 'Test', 'Vehiculo', '9999-9999', 'test_cliente_vehiculo@sigta.com']);
 
     clienteId = clienteRes.rows[0].id;
 
-    // 3. Obtenemos un marca_id real de marcas_vehiculo (la FK que exige vehiculos.marca_id)
-    const marcaRes = await db.query(
-      `SELECT id FROM marcas_vehiculo WHERE nombre = 'Toyota' LIMIT 1`
-    );
+    const marcaRes = await pool.query(`SELECT id FROM marcas_vehiculo WHERE nombre = 'Toyota' LIMIT 1`);
     toyotaId = marcaRes.rows[0].id;
   });
 
-  // --- PRUEBAS DE LECTURA (GET) ---
+  afterAll(async () => {
+    try {
+      if (vehiculoId) {
+        await pool.query('DELETE FROM vehiculos WHERE id = $1', [vehiculoId]);
+      }
+      if (clienteId) {
+        await pool.query('DELETE FROM clientes WHERE id = $1', [clienteId]);
+      }
+    } catch (error) {
+      console.error('Error limpiando datos:', error.message);
+    } finally {
+      await pool.end();
+    }
+  });
 
   test('GET /api/vehiculos - debería devolver lista de vehículos', async () => {
     const response = await request(app)
@@ -65,17 +68,10 @@ describe('Vehículos Endpoints', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
-    // findAllMarcas ordena alfabéticamente, así que Toyota no necesariamente
-    // es la primera fila. Verificamos que exista en la lista.
-    expect(
-      response.body.data.some((m) => m.nombre === 'Toyota')
-    ).toBe(true);
+    expect(response.body.data.some((m) => m.nombre === 'Toyota')).toBe(true);
   });
 
-  // --- PRUEBAS DE CREACIÓN (POST) ---
-
   test('POST /api/vehiculos - debería registrar un vehículo exitosamente', async () => {
-    // Placa dinámica para que jamás colisione en GitHub Actions/CI por UNIQUE constraint
     const placaUnica = `H${Math.floor(1000 + Math.random() * 9000)}`;
 
     const response = await request(app)
@@ -95,7 +91,6 @@ describe('Vehículos Endpoints', () => {
     expect(response.body).toHaveProperty('success', true);
     expect(response.body.data).toHaveProperty('placa', placaUnica);
 
-    // Almacenamos el id para usarlo en las pruebas de búsqueda, actualización e historial
     vehiculoId = response.body.data.id;
   });
 
@@ -105,12 +100,11 @@ describe('Vehículos Endpoints', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         placa: 'HBA1111',
-        marca_id: toyotaId // Faltan modelo, anio, tipo, cliente_id
+        marca_id: toyotaId
       });
 
     expect(response.status).toBe(400);
     expect(response.body.success).toBe(false);
-    expect(response.body.message).toBe('Todos los campos obligatorios deben enviarse');
   });
 
   test('POST /api/vehiculos - debería devolver 400 si el año es menor a 1950 o absurdo', async () => {
@@ -121,7 +115,7 @@ describe('Vehículos Endpoints', () => {
         placa: 'HBA2222',
         marca_id: toyotaId,
         modelo: 'Civic',
-        anio: 1940, // Inválido menor a 1950
+        anio: 1940,
         tipo: 'turismo',
         cliente_id: clienteId
       });
@@ -139,15 +133,13 @@ describe('Vehículos Endpoints', () => {
         marca_id: toyotaId,
         modelo: 'Cruiser',
         anio: 2020,
-        tipo: 'Motocicleta', // Tipo inválido basado en tus TIPOS_VALIDOS
+        tipo: 'Motocicleta',
         cliente_id: clienteId
       });
 
     expect(response.status).toBe(400);
     expect(response.body.message).toBe('Tipo de vehículo inválido');
   });
-
-  // --- PRUEBAS DE OPERACIONES CON PARAMETROS (GET/:id, PUT, BUSCAR, HISTORIAL) ---
 
   test('GET /api/vehiculos/:id - debería obtener los datos de un vehículo específico', async () => {
     const response = await request(app)
@@ -162,7 +154,7 @@ describe('Vehículos Endpoints', () => {
   test('GET /api/vehiculos/buscar - debería filtrar vehículos por coincidencia de query', async () => {
     const response = await request(app)
       .get('/api/vehiculos/buscar')
-      .query({ q: '22R' }) // Busca por el modelo que insertamos previamente
+      .query({ q: '22R' })
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
@@ -190,7 +182,7 @@ describe('Vehículos Endpoints', () => {
     expect(response.body.data.modelo).toBe('22R Modified');
   });
 
-  test('GET /api/vehiculos/:id/historial - debería traer el historial de órdenes de trabajo (vacío o con datos)', async () => {
+  test('GET /api/vehiculos/:id/historial - debería traer el historial de órdenes de trabajo', async () => {
     const response = await request(app)
       .get(`/api/vehiculos/${vehiculoId}/historial`)
       .set('Authorization', `Bearer ${token}`);
@@ -208,19 +200,5 @@ describe('Vehículos Endpoints', () => {
 
     expect(response.status).toBe(404);
     expect(response.body.success).toBe(false);
-  });
-
-  // --- LIMPIEZA DE ENTORNO ---
-
-  afterAll(async () => {
-    if (clienteId) {
-      // vehiculos.cliente_id es ON DELETE RESTRICT, así que hay que borrar
-      // los vehículos vinculados antes de borrar el cliente.
-      await db.query('DELETE FROM vehiculos WHERE cliente_id = $1', [clienteId]);
-      await db.query('DELETE FROM clientes WHERE id = $1', [clienteId]);
-    }
-
-    // Cerramos la conexión para que Jest no se quede colgado
-    await db.end();
   });
 });

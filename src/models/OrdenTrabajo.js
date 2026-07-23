@@ -1,199 +1,218 @@
-const pool = require('../config/db');
+const OrdenTrabajo = class OrdenTrabajo {
+  constructor({
+    id,
+    numero_orden,
+    vehiculo_id,
+    mecanico_id,
+    fecha_ingreso,
+    descripcion_problema,
+    estado,
+    prioridad,
+    fecha_creacion,
+    fecha_actualizacion,
+    placa,
+    modelo,
+    marca,
+    cliente_nombre,
+    cliente_id,
+    mecanico_nombre,
+    diagnosticos = [],
+    historial_estados = []
+  } = {}) {
+    this.id = id;
+    this.numero_orden = numero_orden;
+    this.vehiculo_id = vehiculo_id;
+    this.mecanico_id = mecanico_id;
+    this.fecha_ingreso = fecha_ingreso || new Date();
+    this.descripcion_problema = descripcion_problema;
+    this.estado = estado || 'recibido';
+    this.prioridad = prioridad || 0;
+    this.fecha_creacion = fecha_creacion || new Date();
+    this.fecha_actualizacion = fecha_actualizacion || new Date();
+    this.placa = placa;
+    this.modelo = modelo;
+    this.marca = marca;
+    this.cliente_nombre = cliente_nombre;
+    this.cliente_id = cliente_id;
+    this.mecanico_nombre = mecanico_nombre;
+    this.diagnosticos = diagnosticos;
+    this.historial_estados = historial_estados;
+  }
 
-class OrdenTrabajo {
-  static async findAll(filtros = {}) {
-    let query = `
-      SELECT o.*, 
-             v.placa, v.modelo,
-             CONCAT(c.primer_nombre, ' ', c.primer_apellido) as cliente_nombre,
-             u.nombre_completo as mecanico_nombre
-      FROM ordenes_trabajo o
-      JOIN vehiculos v ON o.vehiculo_id = v.id
-      JOIN clientes c ON v.cliente_id = c.id
-      LEFT JOIN usuarios u ON o.mecanico_id = u.id
-      WHERE 1=1
-    `;
-    const values = [];
-    let index = 1;
- 
-    if (filtros.estado) {
-      query += ` AND o.estado = $${index++}`;
-      values.push(filtros.estado);
-    }
-    if (filtros.mecanico_id) {
-      query += ` AND o.mecanico_id = $${index++}`;
-      values.push(filtros.mecanico_id);
-    }
-    if (filtros.cliente_id) {
-      query += ` AND v.cliente_id = $${index++}`;
-      values.push(filtros.cliente_id);
-    }
-    if (filtros.fecha_inicio) {
-      query += ` AND o.fecha_ingreso >= $${index++}`;
-      values.push(filtros.fecha_inicio);
-    }
-    if (filtros.fecha_fin) {
-      query += ` AND o.fecha_ingreso <= $${index++}`;
-      values.push(filtros.fecha_fin);
-    }
- 
-    query += ` ORDER BY o.fecha_ingreso DESC`;
-    const result = await pool.query(query, values);
-    return result.rows;
+  static get ESTADOS_VALIDOS() {
+    return ['recibido', 'en reparacion', 'listo', 'entregado'];
   }
- 
-  static async findById(id) {
-    const result = await pool.query(
-      `SELECT o.*, 
-              v.placa, v.modelo, m.nombre AS marca, v.anio,
-              c.id as cliente_id, 
-              CONCAT(c.primer_nombre, ' ', c.primer_apellido) as cliente_nombre, 
-              c.telefono,
-              u.id as mecanico_id, u.nombre_completo as mecanico_nombre,
-              COALESCE(
-                (SELECT json_agg(json_build_object(
-                  'id', d.id,
-                  'descripcion_falla', d.descripcion_falla,
-                  'observaciones', d.observaciones,
-                  'estado', d.estado
-                )) FROM diagnosticos d WHERE d.orden_id = o.id),
-                '[]'::json
-              ) as diagnosticos,
-              COALESCE(
-                (SELECT json_agg(json_build_object(
-                  'id', h.id,
-                  'estado', h.estado,
-                  'notas', h.notas,
-                  'fecha_hora', h.fecha_hora
-                ) ORDER BY h.fecha_hora DESC) 
-                FROM historial_estados_orden h WHERE h.orden_id = o.id),
-                '[]'::json
-              ) as historial_estados
-     FROM ordenes_trabajo o
-     JOIN vehiculos v ON o.vehiculo_id = v.id
-     JOIN marcas_vehiculo m ON v.marca_id = m.id
-     JOIN clientes c ON v.cliente_id = c.id
-     LEFT JOIN usuarios u ON o.mecanico_id = u.id
-     WHERE o.id = $1
-     GROUP BY o.id, v.id, m.id, c.id, u.id`,
-      [id]
-    );
-    return result.rows[0] || null;
+
+  get esta_abierta() {
+    return this.estado !== 'entregado';
   }
- 
-  static async create(data) {
-    const { vehiculo_id, descripcion_problema, prioridad = 0 } = data;
- 
-    // ordenes_trabajo no tiene columna cliente_id: el cliente siempre
-    // se obtiene indirectamente vía vehiculo_id -> vehiculos.cliente_id.
-    // Aquí solo validamos que el vehículo exista antes de crear la orden.
-    const vehiculoResult = await pool.query(
-      'SELECT cliente_id FROM vehiculos WHERE id = $1',
-      [vehiculo_id]
-    );
- 
-    if (vehiculoResult.rows.length === 0) {
-      const error = new Error('Vehículo no encontrado');
-      error.code = 'VEHICULO_NO_ENCONTRADO';
-      throw error;
+
+  get esta_en_reparacion() {
+    return this.estado === 'en reparacion';
+  }
+
+  get esta_lista() {
+    return this.estado === 'listo';
+  }
+
+  get esta_entregada() {
+    return this.estado === 'entregado';
+  }
+
+  get es_prioritaria() {
+    return this.prioridad >= 2;
+  }
+
+  get es_urgente() {
+    return this.prioridad >= 3;
+  }
+
+  cambiarEstado(nuevoEstado, notas = null, usuario_id = null) {
+    if (!OrdenTrabajo.ESTADOS_VALIDOS.includes(nuevoEstado)) {
+      throw new Error(`Estado inválido. Estados válidos: ${OrdenTrabajo.ESTADOS_VALIDOS.join(', ')}`);
     }
- 
-    const result = await pool.query(
-      `INSERT INTO ordenes_trabajo 
-        (vehiculo_id, descripcion_problema, prioridad) 
-       VALUES ($1, $2, $3) 
-       RETURNING *`,
-      [vehiculo_id, descripcion_problema, prioridad]
-    );
-    return result.rows[0];
+
+    const estadoAnterior = this.estado;
+    this.estado = nuevoEstado;
+    this.fecha_actualizacion = new Date();
+    this._agregarHistorial(nuevoEstado, notas, usuario_id);
+
+    return {
+      estadoAnterior,
+      estadoNuevo: nuevoEstado,
+      notas,
+      usuario_id,
+      fecha: new Date()
+    };
   }
- 
-  static async asignarMecanico(id, mecanico_id) {
-    const result = await pool.query(
-      `UPDATE ordenes_trabajo 
-       SET mecanico_id = $1, fecha_actualizacion = NOW() 
-       WHERE id = $2 
-       RETURNING *`,
-      [mecanico_id, id]
-    );
-    return result.rows[0] || null;
-  }
- 
-  static async actualizarEstado(id, estado, notas = null, usuario_id = null) {
-    const result = await pool.query(
-      `UPDATE ordenes_trabajo 
-       SET estado = $1, fecha_actualizacion = NOW() 
-       WHERE id = $2 
-       RETURNING *`,
-      [estado, id]
-    );
- 
-    if (result.rows[0]) {
-      await pool.query(
-        `INSERT INTO historial_estados_orden (orden_id, estado, notas, usuario_id) 
-         VALUES ($1, $2, $3, $4)`,
-        [id, estado, notas, usuario_id]
-      );
+
+  asignarMecanico(mecanico_id, usuario_id = null) {
+    if (this.estado === 'entregado') {
+      throw new Error('No se puede asignar un mecánico a una orden ya entregada');
     }
- 
-    return result.rows[0] || null;
-  }
- 
-  static async cerrar(id, usuario_id = null) {
-    const result = await pool.query(
-      `UPDATE ordenes_trabajo 
-       SET estado = 'entregado', fecha_actualizacion = NOW() 
-       WHERE id = $1 AND estado != 'entregado'
-       RETURNING *`,
-      [id]
+
+    const mecanicoAnterior = this.mecanico_id;
+    this.mecanico_id = mecanico_id;
+    this.fecha_actualizacion = new Date();
+
+    this._agregarHistorial(
+      this.estado,
+      `Mecánico asignado: ${mecanicoAnterior ? `anterior: ${mecanicoAnterior} → nuevo: ${mecanico_id}` : `ID: ${mecanico_id}`}`,
+      usuario_id
     );
- 
-    if (result.rows[0]) {
-      await pool.query(
-        `INSERT INTO historial_estados_orden (orden_id, estado, notas, usuario_id) 
-         VALUES ($1, 'entregado', 'Orden cerrada', $2)`,
-        [id, usuario_id]
-      );
+
+    return {
+      mecanicoAnterior,
+      mecanicoNuevo: mecanico_id
+    };
+  }
+
+  agregarDiagnostico(diagnostico) {
+    this.diagnosticos.push(diagnostico);
+    this.fecha_actualizacion = new Date();
+  }
+
+  marcarComoListo(notas = null, usuario_id = null) {
+    if (this.estado === 'entregado') {
+      throw new Error('La orden ya está entregada');
     }
- 
-    return result.rows[0] || null;
+    return this.cambiarEstado('listo', notas, usuario_id);
   }
- 
-  static async reasignar(id, mecanico_id, usuario_id = null) {
-    const result = await pool.query(
-      `UPDATE ordenes_trabajo 
-       SET mecanico_id = $1, fecha_actualizacion = NOW() 
-       WHERE id = $2 
-       RETURNING *`,
-      [mecanico_id, id]
-    );
- 
-    if (result.rows[0]) {
-      await pool.query(
-        `INSERT INTO historial_estados_orden (orden_id, estado, notas, usuario_id) 
-         VALUES ($1, (SELECT estado FROM ordenes_trabajo WHERE id = $2), 
-                 $3, $4)`,
-        [id, id, `Reasignado a mecánico ID: ${mecanico_id}`, usuario_id]
-      );
+
+  marcarComoEntregada(notas = null, usuario_id = null) {
+    if (this.estado === 'entregado') {
+      throw new Error('La orden ya está entregada');
     }
- 
-    return result.rows[0] || null;
+    return this.cambiarEstado('entregado', notas || 'Orden completada', usuario_id);
   }
- 
-  static async findByMecanico(mecanico_id) {
-    const result = await pool.query(
-      `SELECT o.*, 
-              v.placa, v.modelo,
-              CONCAT(c.primer_nombre, ' ', c.primer_apellido) as cliente_nombre
-       FROM ordenes_trabajo o
-       JOIN vehiculos v ON o.vehiculo_id = v.id
-       JOIN clientes c ON v.cliente_id = c.id
-       WHERE o.mecanico_id = $1
-       ORDER BY o.fecha_ingreso DESC`,
-      [mecanico_id]
-    );
-    return result.rows;
+
+  reabrir(notas = null, usuario_id = null) {
+    if (this.estado !== 'entregado') {
+      throw new Error('Solo se pueden reabrir órdenes entregadas');
+    }
+    return this.cambiarEstado('en reparacion', notas || 'Orden reabierta', usuario_id);
   }
-}
- 
+
+  _agregarHistorial(estado, notas, usuario_id) {
+    this.historial_estados.push({
+      estado,
+      notas,
+      usuario_id: usuario_id,
+      fecha_hora: new Date()
+    });
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      numero_orden: this.numero_orden,
+      vehiculo_id: this.vehiculo_id,
+      mecanico_id: this.mecanico_id,
+      fecha_ingreso: this.fecha_ingreso,
+      descripcion_problema: this.descripcion_problema,
+      estado: this.estado,
+      prioridad: this.prioridad,
+      fecha_creacion: this.fecha_creacion,
+      fecha_actualizacion: this.fecha_actualizacion,
+      placa: this.placa,
+      modelo: this.modelo,
+      marca: this.marca,
+      cliente_nombre: this.cliente_nombre,
+      cliente_id: this.cliente_id,
+      mecanico_nombre: this.mecanico_nombre,
+      diagnosticos: this.diagnosticos,
+      historial_estados: this.historial_estados,
+      esta_abierta: this.esta_abierta,
+      es_prioritaria: this.es_prioritaria
+    };
+  }
+
+  toDatabase() {
+    return {
+      id: this.id,
+      numero_orden: this.numero_orden,
+      vehiculo_id: this.vehiculo_id,
+      mecanico_id: this.mecanico_id,
+      fecha_ingreso: this.fecha_ingreso,
+      descripcion_problema: this.descripcion_problema,
+      estado: this.estado,
+      prioridad: this.prioridad,
+      fecha_creacion: this.fecha_creacion,
+      fecha_actualizacion: this.fecha_actualizacion
+    };
+  }
+
+  static fromDatabase(data) {
+    return new OrdenTrabajo({
+      id: data.id,
+      numero_orden: data.numero_orden,
+      vehiculo_id: data.vehiculo_id,
+      mecanico_id: data.mecanico_id,
+      fecha_ingreso: data.fecha_ingreso,
+      descripcion_problema: data.descripcion_problema,
+      estado: data.estado,
+      prioridad: data.prioridad,
+      fecha_creacion: data.fecha_creacion,
+      fecha_actualizacion: data.fecha_actualizacion,
+      placa: data.placa,
+      modelo: data.modelo,
+      marca: data.marca,
+      cliente_nombre: data.cliente_nombre,
+      cliente_id: data.cliente_id,
+      mecanico_nombre: data.mecanico_nombre,
+      diagnosticos: data.diagnosticos || [],
+      historial_estados: data.historial_estados || []
+    });
+  }
+
+  static forCreation(data) {
+    return new OrdenTrabajo({
+      vehiculo_id: data.vehiculo_id,
+      descripcion_problema: data.descripcion_problema,
+      prioridad: data.prioridad || 0,
+      estado: 'recibido'
+    });
+  }
+};
+
 module.exports = OrdenTrabajo;

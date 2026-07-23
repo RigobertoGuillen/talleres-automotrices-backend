@@ -4,19 +4,27 @@ const pool = require('../src/config/db');
 
 describe('Ordenes de Trabajo Endpoints', () => {
   let token;
-  let ordenId;
+  let numeroOrden;
+  let numeroOrdenReasignada;
   let mecanicoId;
   let vehiculoId;
 
   beforeAll(async () => {
+    // Obtener token - NO eliminar usuario admin
     const response = await request(app)
       .post('/api/auth/login')
       .send({
         nombre_usuario: 'admin',
         contrasena: 'admin123'
       });
+
     token = response.body.token;
 
+    if (!token) {
+      throw new Error('No se pudo obtener el token: ' + JSON.stringify(response.body));
+    }
+
+    // Obtener mecánico
     const mecanicoResult = await pool.query(
       "SELECT id FROM usuarios WHERE rol_id = (SELECT id FROM roles WHERE nombre = 'mecanico') LIMIT 1"
     );
@@ -24,18 +32,16 @@ describe('Ordenes de Trabajo Endpoints', () => {
       mecanicoId = mecanicoResult.rows[0].id;
     }
 
-    const vehiculoResult = await pool.query(
-      "SELECT id FROM vehiculos LIMIT 1"
-    );
+    // Obtener vehículo existente
+    const vehiculoResult = await pool.query("SELECT id FROM vehiculos LIMIT 1");
     if (vehiculoResult.rows.length > 0) {
       vehiculoId = vehiculoResult.rows[0].id;
     } else {
+      // Si no hay vehículos, crear uno
       const clienteResult = await pool.query("SELECT id FROM clientes LIMIT 1");
       let clienteId = clienteResult.rows[0]?.id;
 
       if (!clienteId) {
-        // Esquema normalizado: dni, primer_nombre, primer_apellido y
-        // segundo_apellido son NOT NULL. id se autogenera (IDENTITY).
         const newCliente = await pool.query(
           `INSERT INTO clientes (dni, primer_nombre, primer_apellido, segundo_apellido, telefono)
            VALUES ('0801199912345', 'Cliente', 'Prueba', 'Ordenes', '8888-8888')
@@ -44,8 +50,6 @@ describe('Ordenes de Trabajo Endpoints', () => {
         clienteId = newCliente.rows[0].id;
       }
 
-      // vehiculos.marca_id es FK a marcas_vehiculo, ya no existe columna
-      // de texto "marca". Buscamos un id real de marca.
       const marcaResult = await pool.query(
         "SELECT id FROM marcas_vehiculo WHERE nombre = 'Toyota' LIMIT 1"
       );
@@ -62,14 +66,32 @@ describe('Ordenes de Trabajo Endpoints', () => {
   });
 
   afterAll(async () => {
-    // historial_estados_orden, diagnosticos y orden_servicio tienen
-    // ON DELETE CASCADE sobre ordenes_trabajo, así que se limpian solos.
-    // movimientos_inventario NO tiene cascade, pero esta suite no genera
-    // movimientos de inventario, así que el DELETE de abajo es seguro.
-    await pool.query("DELETE FROM movimientos_inventario");
-    await pool.query("DELETE FROM ordenes_trabajo WHERE vehiculo_id = $1", [vehiculoId]);
-    await pool.query("DELETE FROM vehiculos WHERE placa LIKE 'ORD-%'");
-    await pool.end();
+    try {
+      for (const orden of [numeroOrden, numeroOrdenReasignada]) {
+        if (!orden) continue;
+        
+        await pool.query(
+          "DELETE FROM factura_detalle WHERE factura_id IN (SELECT id FROM facturas WHERE orden_id = $1)",
+          [orden]
+        );
+        
+        await pool.query("DELETE FROM facturas WHERE orden_id = $1", [orden]);
+        
+        await pool.query("DELETE FROM diagnosticos WHERE orden_id = $1", [orden]);
+        
+        await pool.query("DELETE FROM historial_estados_orden WHERE orden_id = $1", [orden]);
+        
+        await pool.query("DELETE FROM ordenes_trabajo WHERE numero_orden = $1", [orden]);
+      }
+      
+      if (vehiculoId) {
+        await pool.query("DELETE FROM vehiculos WHERE placa LIKE 'ORD-%'");
+      }
+    } catch (error) {
+      console.error('Error limpiando datos:', error.message);
+    } finally {
+      await pool.end();
+    }
   });
 
   test('POST /api/ordenes - debería crear una orden de trabajo', async () => {
@@ -84,18 +106,18 @@ describe('Ordenes de Trabajo Endpoints', () => {
 
     expect(response.status).toBe(201);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('id');
-    ordenId = response.body.data.id;
+    expect(response.body.data).toHaveProperty('numero_orden');
+    numeroOrden = response.body.data.numero_orden;
   });
 
   test('GET /api/ordenes/:id - debería obtener detalle de una orden', async () => {
     const response = await request(app)
-      .get(`/api/ordenes/${ordenId}`)
+      .get(`/api/ordenes/${numeroOrden}`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(response.body).toHaveProperty('data');
-    expect(response.body.data).toHaveProperty('id', ordenId);
+    expect(response.body.data).toHaveProperty('numero_orden', numeroOrden);
   });
 
   test('GET /api/ordenes?estado=recibido - debería filtrar por estado', async () => {
@@ -115,7 +137,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
     }
 
     const response = await request(app)
-      .patch(`/api/ordenes/${ordenId}/asignar`)
+      .patch(`/api/ordenes/${numeroOrden}/asignar`)
       .set('Authorization', `Bearer ${token}`)
       .send({ mecanico_id: mecanicoId });
 
@@ -126,7 +148,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
 
   test('PATCH /api/ordenes/:id/estado - debería actualizar el estado', async () => {
     const response = await request(app)
-      .patch(`/api/ordenes/${ordenId}/estado`)
+      .patch(`/api/ordenes/${numeroOrden}/estado`)
       .set('Authorization', `Bearer ${token}`)
       .send({
         estado: 'en reparacion',
@@ -155,7 +177,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
 
   test('PATCH /api/ordenes/:id/cerrar - debería cerrar la orden', async () => {
     const response = await request(app)
-      .patch(`/api/ordenes/${ordenId}/cerrar`)
+      .patch(`/api/ordenes/${numeroOrden}/cerrar`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
@@ -178,10 +200,10 @@ describe('Ordenes de Trabajo Endpoints', () => {
         prioridad: 1
       });
 
-    const newOrdenId = newOrden.body.data.id;
+    numeroOrdenReasignada = newOrden.body.data.numero_orden;
 
     const response = await request(app)
-      .patch(`/api/ordenes/${newOrdenId}/reasignar`)
+      .patch(`/api/ordenes/${numeroOrdenReasignada}/reasignar`)
       .set('Authorization', `Bearer ${token}`)
       .send({ mecanico_id: mecanicoId });
 
