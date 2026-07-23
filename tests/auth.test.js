@@ -1,31 +1,11 @@
 const request = require('supertest');
 const app = require('../src/app');
-const bcrypt = require('bcryptjs');
 const pool = require('../src/config/db');
 
 describe('Auth Endpoints', () => {
   beforeAll(async () => {
     try {
-      await pool.query("DELETE FROM historial_estados_orden");
-      await pool.query("DELETE FROM usuarios WHERE nombre_usuario = 'admin'");
-
-      const contrasenaHash = await bcrypt.hash('admin123', 10);
-
-      await pool.query(`
-        INSERT INTO roles (nombre, descripcion) 
-        VALUES ('administrador', 'Acceso total al sistema')
-        ON CONFLICT (nombre) DO NOTHING;
-      `);
-
-      await pool.query(`
-        INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
-        VALUES ('Administrador', 'admin', 'admin@sigta.com', $1, 
-                (SELECT id FROM roles WHERE nombre = 'administrador'), true)
-        ON CONFLICT (nombre_usuario) DO NOTHING;
-      `, [contrasenaHash]);
-
-      console.log('✅ Usuario admin creado en auth.test.js');
-
+      console.log(' Usuario admin ya existe para pruebas');
     } catch (err) {
       console.error('Error en setup auth:', err);
     }
