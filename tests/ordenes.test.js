@@ -1,7 +1,6 @@
 const request = require('supertest');
 const app = require('../src/app');
 const pool = require('../src/config/db');
-const bcrypt = require('bcryptjs');
 
 describe('Ordenes de Trabajo Endpoints', () => {
   let token;
@@ -11,17 +10,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
   let vehiculoId;
 
   beforeAll(async () => {
-    // Asegurar que el usuario admin existe
-    const hash = await bcrypt.hash('admin123', 10);
-    await pool.query(`DELETE FROM usuarios WHERE nombre_usuario = 'admin'`);
-    await pool.query(
-      `INSERT INTO usuarios (nombre_completo, nombre_usuario, correo, contrasena_hash, rol_id, activo)
-       VALUES ('Administrador', 'admin', 'admin@taller.com', $1, 
-               (SELECT id FROM roles WHERE nombre = 'administrador'), true)`,
-      [hash]
-    );
-
-    // Obtener token
+    // Obtener token - NO eliminar usuario admin
     const response = await request(app)
       .post('/api/auth/login')
       .send({
@@ -47,6 +36,32 @@ describe('Ordenes de Trabajo Endpoints', () => {
     const vehiculoResult = await pool.query("SELECT id FROM vehiculos LIMIT 1");
     if (vehiculoResult.rows.length > 0) {
       vehiculoId = vehiculoResult.rows[0].id;
+    } else {
+      // Si no hay vehículos, crear uno
+      const clienteResult = await pool.query("SELECT id FROM clientes LIMIT 1");
+      let clienteId = clienteResult.rows[0]?.id;
+
+      if (!clienteId) {
+        const newCliente = await pool.query(
+          `INSERT INTO clientes (dni, primer_nombre, primer_apellido, segundo_apellido, telefono)
+           VALUES ('0801199912345', 'Cliente', 'Prueba', 'Ordenes', '8888-8888')
+           RETURNING id`
+        );
+        clienteId = newCliente.rows[0].id;
+      }
+
+      const marcaResult = await pool.query(
+        "SELECT id FROM marcas_vehiculo WHERE nombre = 'Toyota' LIMIT 1"
+      );
+      const marcaId = marcaResult.rows[0].id;
+
+      const newVehiculo = await pool.query(
+        `INSERT INTO vehiculos (placa, marca_id, modelo, anio, color, tipo, cliente_id)
+         VALUES ('ORD-999', $1, 'Prueba', 2020, 'Blanco', 'turismo', $2)
+         RETURNING id`,
+        [marcaId, clienteId]
+      );
+      vehiculoId = newVehiculo.rows[0].id;
     }
   });
 
@@ -54,11 +69,23 @@ describe('Ordenes de Trabajo Endpoints', () => {
     try {
       for (const orden of [numeroOrden, numeroOrdenReasignada]) {
         if (!orden) continue;
-        await pool.query("DELETE FROM factura_detalle WHERE factura_id IN (SELECT id FROM facturas WHERE orden_id = $1)", [orden]);
+        
+        await pool.query(
+          "DELETE FROM factura_detalle WHERE factura_id IN (SELECT id FROM facturas WHERE orden_id = $1)",
+          [orden]
+        );
+        
         await pool.query("DELETE FROM facturas WHERE orden_id = $1", [orden]);
+        
         await pool.query("DELETE FROM diagnosticos WHERE orden_id = $1", [orden]);
+        
         await pool.query("DELETE FROM historial_estados_orden WHERE orden_id = $1", [orden]);
+        
         await pool.query("DELETE FROM ordenes_trabajo WHERE numero_orden = $1", [orden]);
+      }
+      
+      if (vehiculoId) {
+        await pool.query("DELETE FROM vehiculos WHERE placa LIKE 'ORD-%'");
       }
     } catch (error) {
       console.error('Error limpiando datos:', error.message);
@@ -164,7 +191,6 @@ describe('Ordenes de Trabajo Endpoints', () => {
       return;
     }
 
-    // Crear una nueva orden para reasignar
     const newOrden = await request(app)
       .post('/api/ordenes')
       .set('Authorization', `Bearer ${token}`)
@@ -174,9 +200,7 @@ describe('Ordenes de Trabajo Endpoints', () => {
         prioridad: 1
       });
 
-    numeroOrdenReasignada = newOrden.body.data.numero_orden;  
-
-    
+    numeroOrdenReasignada = newOrden.body.data.numero_orden;
 
     const response = await request(app)
       .patch(`/api/ordenes/${numeroOrdenReasignada}/reasignar`)
