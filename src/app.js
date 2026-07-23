@@ -11,6 +11,7 @@ const diagnosticoRoutes = require('./routes/diagnosticoRoutes');
 const inventarioRoutes = require('./routes/inventarioRoutes');
 const reporteRoutes = require('./routes/reporteRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const servicioRoutes = require('./routes/servicioRoutes');
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use('/api/diagnosticos', diagnosticoRoutes);
 app.use('/api/inventario', inventarioRoutes);
 app.use('/api/reportes', reporteRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/servicios', servicioRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Servidor funcionando' });
