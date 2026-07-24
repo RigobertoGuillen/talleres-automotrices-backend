@@ -72,10 +72,50 @@ const deleteServicio = async (req, res) => {
   }
 };
 
+const getServiciosByOrden = async (req, res) => {
+  try {
+    const { ordenId } = req.params;
+    const result = await ServicioService.ordenServicioGetByOrden(ordenId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error en getServiciosByOrden:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener los servicios de la orden' });
+  }
+};
+
+const registrarServicioEnOrden = async (req, res) => {
+  try {
+    const result = await ServicioService.ordenServicioCreate(req.body);
+    if (!result.success) {
+      const status = result.message.includes('obligatori') || result.message.includes('no encontrad') ? 400 : 500;
+      return res.status(status).json(result);
+    }
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error en registrarServicioEnOrden:', error);
+    res.status(500).json({ success: false, message: 'Error al registrar el servicio en la orden' });
+  }
+};
+
+const eliminarServicioDeOrden = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await ServicioService.ordenServicioDelete(id);
+    if (!result.success) return res.status(404).json(result);
+    res.json(result);
+  } catch (error) {
+    console.error('Error en eliminarServicioDeOrden:', error);
+    res.status(500).json({ success: false, message: 'Error al remover el servicio de la orden' });
+  }
+};
+
 module.exports = {
   getServicios,
   getServicioById,
   createServicio,
   updateServicio,
-  deleteServicio
+  deleteServicio,
+  getServiciosByOrden,
+  registrarServicioEnOrden,
+  eliminarServicioDeOrden
 };

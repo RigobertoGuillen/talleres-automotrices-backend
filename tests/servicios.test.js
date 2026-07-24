@@ -20,11 +20,13 @@ describe('Módulo de Catálogo de Servicios', () => {
       throw new Error('No se pudo obtener el token: ' + JSON.stringify(response.body));
     }
 
+    await pool.query("DELETE FROM orden_servicio WHERE servicio_id IN (SELECT id FROM servicio_catalogo WHERE nombre LIKE 'Test-%')");
     await pool.query("DELETE FROM servicio_catalogo WHERE nombre LIKE 'Test-%'");
   });
 
   afterAll(async () => {
     try {
+      await pool.query("DELETE FROM orden_servicio WHERE servicio_id IN (SELECT id FROM servicio_catalogo WHERE nombre LIKE 'Test-%')");
       await pool.query("DELETE FROM servicio_catalogo WHERE nombre LIKE 'Test-%'");
     } catch (error) {
       console.error('Error limpiando datos:', error.message);
@@ -115,6 +117,99 @@ describe('Módulo de Catálogo de Servicios', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
+  });
+
+  describe('Servicios aplicados a una orden (orden_servicio)', () => {
+    let servicioOrdenId;
+    let ordenServicioId;
+
+    beforeAll(async () => {
+      const creado = await request(app)
+        .post('/api/servicios')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ nombre: 'Test-OrdenServicio-Aceite', precio_base: 450 });
+      servicioOrdenId = creado.body.data.id;
+    });
+
+    test('POST /api/servicios/orden - debería registrar un servicio en una orden', async () => {
+      const response = await request(app)
+        .post('/api/servicios/orden')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          orden_id: 'ORD-1',
+          servicio_id: servicioOrdenId,
+          tiempo_empleado_minutos: 30,
+          observaciones: 'Cambio de aceite de rutina (prueba)'
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.orden_id).toBe('ORD-1');
+      expect(parseFloat(response.body.data.precio_aplicado)).toBe(450);
+
+      ordenServicioId = response.body.data.id;
+    });
+
+    test('POST /api/servicios/orden - debería fallar con una orden inexistente', async () => {
+      const response = await request(app)
+        .post('/api/servicios/orden')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ orden_id: 'ORD-NO-EXISTE', servicio_id: servicioOrdenId });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toContain('no encontrada');
+    });
+
+    test('GET /api/servicios/orden/:ordenId - debería listar los servicios de la orden', async () => {
+      const response = await request(app)
+        .get('/api/servicios/orden/ORD-1')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.some(s => s.id === ordenServicioId)).toBe(true);
+    });
+
+    test('DELETE /api/servicios/:id - no debería poder eliminar el servicio mientras esté aplicado', async () => {
+      const response = await request(app)
+        .delete(`/api/servicios/${servicioOrdenId}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toContain('aplicado');
+    });
+
+    test('DELETE /api/servicios/orden/:id - debería remover el servicio de la orden', async () => {
+      const response = await request(app)
+        .delete(`/api/servicios/orden/${ordenServicioId}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+    });
+
+    test('POST /api/servicios/orden - debería devolver 403 si es recepcionista', async () => {
+      const loginResponse = await request(app)
+        .post('/api/auth/login')
+        .send({ nombre_usuario: 'alopez', contrasena: 'alopez123' });
+
+      if (loginResponse.status !== 200) {
+        console.log('Login de alopez falló:', loginResponse.body);
+        return;
+      }
+
+      const userToken = loginResponse.body.token;
+
+      const response = await request(app)
+        .post('/api/servicios/orden')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ orden_id: 'ORD-1', servicio_id: servicioOrdenId });
+
+      expect(response.status).toBe(403);
+      expect(response.body.success).toBe(false);
+    });
   });
 
   describe('Seguridad', () => {

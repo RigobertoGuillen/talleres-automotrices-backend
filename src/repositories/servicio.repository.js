@@ -45,6 +45,29 @@ class ServicioRepository extends BaseRepository {
     const result = await this.findOne(this.queries.SERVICIO_CHECK_EN_USO, [id]);
     return parseInt(result?.count || 0) > 0;
   }
+
+  async ordenServicioFindByOrden(ordenId) {
+    return this.findAll(this.queries.ORDEN_SERVICIO_FIND_BY_ORDEN, [ordenId]);
+  }
+
+  async ordenServicioFindById(id) {
+    return this.findOne(this.queries.ORDEN_SERVICIO_FIND_BY_ID, [id]);
+  }
+
+  async ordenServicioCheckOrdenExiste(ordenId) {
+    return this.findOne(this.queries.ORDEN_SERVICIO_CHECK_ORDEN_EXISTE, [ordenId]);
+  }
+
+  async ordenServicioCreate(data) {
+    return this.execute(this.queries.ORDEN_SERVICIO_CREATE, [
+      data.orden_id, data.servicio_id, data.tiempo_empleado_minutos || null,
+      data.observaciones || null, data.precio_aplicado
+    ]);
+  }
+
+  async ordenServicioDelete(id) {
+    return this.execute(this.queries.ORDEN_SERVICIO_DELETE, [id]);
+  }
 }
 
 module.exports = new ServicioRepository();
