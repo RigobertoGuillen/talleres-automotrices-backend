@@ -1,6 +1,6 @@
 const BaseRepository = require('./base.repository');
 const pool = require('../config/db');
-const QUERIES = require('../constants/queries/reportesQueries');
+const QUERIES = require('../constants/queries/reporteQueries');
 
 class ReportesRepository extends BaseRepository {
   constructor() {
