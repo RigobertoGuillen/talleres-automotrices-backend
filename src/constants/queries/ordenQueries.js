@@ -86,7 +86,7 @@ module.exports = {
   WHERE TRIM(LOWER(numero_orden)) = TRIM(LOWER($2))
      OR TRIM(LOWER(numero_orden)) = TRIM(LOWER(CONCAT('ORD-', $2)))
   RETURNING *
-;`
+;`,
 
   ACTUALIZAR_ESTADO: `
     UPDATE ordenes_trabajo 
