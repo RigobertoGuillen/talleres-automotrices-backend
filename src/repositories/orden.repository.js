@@ -50,10 +50,10 @@ class OrdenRepository extends BaseRepository {
     return result.rows[0] || null;
   }
 
-  async asignarMecanico(numero_orden, mecanico_id) {
-    const result = await this.query(this.queries.ASIGNAR_MECANICO, [mecanico_id, numero_orden]);
-    return result.rows[0] || null;
-  }
+ async asignarMecanico(numero_orden, mecanico_id) {
+  const result = await this.query(this.queries.ASIGNAR_MECANICO, [mecanico_id, numero_orden]);
+  return result.rows[0] || null;
+}
 
   async actualizarEstado(numero_orden, estado) {
     const result = await this.query(this.queries.ACTUALIZAR_ESTADO, [estado, numero_orden]);
