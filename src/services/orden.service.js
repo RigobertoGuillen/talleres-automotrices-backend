@@ -57,22 +57,27 @@ class OrdenService extends BaseService {
   }
 
   async asignarMecanico(numero_orden, mecanico_id) {
-    try {
-      if (!mecanico_id) {
-        return { success: false, message: 'Mecánico es obligatorio' };
-      }
-
-      const orden = await this.repository.asignarMecanico(numero_orden, mecanico_id);
-      if (!orden) {
-        return { success: false, message: 'Orden no encontrada' };
-      }
-
-      return { success: true, message: 'Mecánico asignado correctamente', data: orden };
-    } catch (error) {
-      console.error('Error en OrdenService.asignarMecanico:', error.message);
-      return { success: false, message: error.message || 'Error al asignar mecánico' };
+  try {
+    if (!mecanico_id) {
+      return { success: false, message: 'Mecánico es obligatorio' };
     }
+
+    // Normalizamos numero_orden para asegurar que tenga el formato 'ORD-XX'
+    const ordenFormateada = numero_orden && !numero_orden.toString().startsWith('ORD-') 
+      ? `ORD-${numero_orden}` 
+      : numero_orden;
+
+    const orden = await this.repository.asignarMecanico(ordenFormateada, mecanico_id);
+    if (!orden) {
+      return { success: false, message: 'Orden no encontrada' };
+    }
+
+    return { success: true, message: 'Mecánico asignado correctamente', data: orden };
+  } catch (error) {
+    console.error('Error en OrdenService.asignarMecanico:', error.message);
+    return { success: false, message: error.message || 'Error al asignar mecánico' };
   }
+}
 
   async actualizarEstado(numero_orden, estado, notas = null, usuario_id = null) {
     try {
