@@ -1,4 +1,3 @@
-javascript
 const pool = require('../config/db');
 const dashboardQueries = require('../constants/queries/dashboardQueries');
 
@@ -17,7 +16,6 @@ const getStats = async (req, res, next) => {
     next(error);
   }
 };
-
 
 const getOrdenesRecientes = async (req, res) => {
   try {
