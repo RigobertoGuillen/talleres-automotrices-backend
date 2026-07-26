@@ -194,17 +194,15 @@ module.exports = {
     SELECT 
       s.id, s.orden_id, s.repuesto_id, s.cantidad_solicitada,
       s.costo_historico, s.precio_historico, s.mecanico_id,
-      s.fecha_solicitud, s.estado, s.aprobado_por, s.fecha_aprobacion,
+      s.fecha_solicitud,
       r.nombre AS repuesto_nombre,
       r.codigo AS repuesto_codigo,
       o.descripcion_problema AS orden_descripcion,
-      u.nombre_completo AS mecanico_nombre,
-      a.nombre_completo AS aprobado_por_nombre
+      u.nombre_completo AS mecanico_nombre
     FROM solicitudes_repuestos s
     JOIN repuestos r ON s.repuesto_id = r.id
     JOIN ordenes_trabajo o ON s.orden_id = o.numero_orden
     LEFT JOIN usuarios u ON s.mecanico_id = u.id
-    LEFT JOIN usuarios a ON s.aprobado_por = a.id
     ORDER BY s.fecha_solicitud DESC
   `,
 
