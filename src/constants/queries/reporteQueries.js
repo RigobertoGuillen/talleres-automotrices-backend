@@ -90,8 +90,8 @@ module.exports = {
     SELECT
       f.fecha_emision::date AS periodo,
       COUNT(f.id) AS facturas,
-      SUM(f.subtotal) AS subtotal,
-      SUM(f.impuesto) AS impuesto,
+      SUM(f.subtotal_exento + f.subtotal_gravado_15) AS subtotal,
+      SUM(f.isv_15) AS impuesto,
       SUM(f.total) AS total
     FROM facturas f
     WHERE f.fecha_emision::date BETWEEN $1 AND $2
@@ -102,8 +102,8 @@ module.exports = {
   INGRESOS_TOTALES: `
     SELECT
       COUNT(f.id) AS facturas,
-      COALESCE(SUM(f.subtotal), 0) AS subtotal,
-      COALESCE(SUM(f.impuesto), 0) AS impuesto,
+      COALESCE(SUM(f.subtotal_exento + f.subtotal_gravado_15), 0) AS subtotal,
+      COALESCE(SUM(f.isv_15), 0) AS impuesto,
       COALESCE(SUM(f.total), 0) AS total
     FROM facturas f
     WHERE f.fecha_emision::date BETWEEN $1 AND $2
