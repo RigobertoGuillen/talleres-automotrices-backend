@@ -10,7 +10,7 @@ const {
   listarMecanicosActivos,
   reporteOrdenesPendientes,
   dashboardGeneral,
-} = require('../controllers/reportesController');
+} = require('../controllers/reporteController');
 
 router.use(verificarToken);
 
