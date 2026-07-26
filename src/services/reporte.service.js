@@ -1,5 +1,5 @@
 const BaseService = require('./base.service');
-const ReportesRepository = require('../repositories/reportes.repository');
+const ReportesRepository = require('../repositories/reporte.repository');
 
 function validarRangoFechas(fechaInicio, fechaFin) {
   if (!fechaInicio || !fechaFin) {
