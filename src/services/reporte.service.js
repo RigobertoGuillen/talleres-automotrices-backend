@@ -1,161 +1,202 @@
 const BaseService = require('./base.service');
-const ReporteRepository = require('../repositories/reporte.repository');
+const ReportesRepository = require('../repositories/reporte.repository');
 
-class ReporteService extends BaseService {
+function validarRangoFechas(fechaInicio, fechaFin) {
+  if (!fechaInicio || !fechaFin) {
+    return 'Debe indicar fecha de inicio y fecha de fin';
+  }
+  const inicio = new Date(fechaInicio);
+  const fin = new Date(fechaFin);
+  if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) {
+    return 'Las fechas indicadas no son válidas';
+  }
+  if (inicio > fin) {
+    return 'La fecha de inicio no puede ser posterior a la fecha de fin';
+  }
+  return null;
+}
+
+class ReportesService extends BaseService {
   constructor() {
-    super(ReporteRepository);
+    super(ReportesRepository);
   }
 
-  async getServiciosRealizados(fechaInicio, fechaFin) {
+  // HU-39: Reporte de servicios realizados
+  async reporteServicios(fechaInicio, fechaFin) {
     try {
-      if (!fechaInicio || !fechaFin) {
-        fechaInicio = new Date(new Date().getFullYear(), 0, 1);
-        fechaFin = new Date();
-      }
-      const data = await this.repository.getServiciosRealizados(fechaInicio, fechaFin);
-      return { 
-        success: true, 
-        data,
-        meta: {
-          total_servicios: data.reduce((sum, item) => sum + parseInt(item.cantidad), 0),
-          total_ingresos: data.reduce((sum, item) => sum + parseFloat(item.total_ingresos), 0)
-        }
-      };
-    } catch (error) {
-      console.error('Error en getServiciosRealizados:', error.message);
-      return { success: false, message: error.message };
-    }
-  }
+      const errorFechas = validarRangoFechas(fechaInicio, fechaFin);
+      if (errorFechas) return { success: false, message: errorFechas };
 
-  async getVehiculosAtendidos(fechaInicio, fechaFin) {
-    try {
-      if (!fechaInicio || !fechaFin) {
-        fechaInicio = new Date(new Date().getFullYear(), 0, 1);
-        fechaFin = new Date();
-      }
-      const data = await this.repository.getVehiculosAtendidos(fechaInicio, fechaFin);
-      const tipos = {};
-      data.forEach(item => {
-        tipos[item.tipo] = (tipos[item.tipo] || 0) + parseInt(item.total_ordenes);
-      });
+      const [detalle, resumen] = await Promise.all([
+        this.repository.serviciosDetalle(fechaInicio, fechaFin),
+        this.repository.serviciosResumen(fechaInicio, fechaFin),
+      ]);
+
       return {
         success: true,
-        data,
-        meta: {
-          total_vehiculos: data.length,
-          total_ordenes: data.reduce((sum, item) => sum + parseInt(item.total_ordenes), 0),
-          por_tipo: tipos
+        data: {
+          detalle,
+          resumen,
+          cantidad_total: detalle.length,
         }
       };
     } catch (error) {
-      console.error('Error en getVehiculosAtendidos:', error.message);
-      return { success: false, message: error.message };
+      console.error('Error en reporteServicios:', error.message);
+      return { success: false, message: 'Error al generar el reporte de servicios' };
     }
   }
 
-  async getRepuestosUtilizados(fechaInicio, fechaFin) {
+  // HU-40: Reporte de vehículos atendidos
+  async reporteVehiculosAtendidos(fechaInicio, fechaFin) {
     try {
-      if (!fechaInicio || !fechaFin) {
-        fechaInicio = new Date(new Date().getFullYear(), 0, 1);
-        fechaFin = new Date();
-      }
-      const data = await this.repository.getRepuestosUtilizados(fechaInicio, fechaFin);
+      const errorFechas = validarRangoFechas(fechaInicio, fechaFin);
+      if (errorFechas) return { success: false, message: errorFechas };
+
+      const [detalle, porTipo] = await Promise.all([
+        this.repository.vehiculosAtendidosDetalle(fechaInicio, fechaFin),
+        this.repository.vehiculosAtendidosPorTipo(fechaInicio, fechaFin),
+      ]);
+
       return {
         success: true,
-        data,
-        meta: {
-          total_repuestos: data.reduce((sum, item) => sum + parseInt(item.total_utilizado), 0),
-          total_valor: data.reduce((sum, item) => sum + parseFloat(item.valor_total), 0)
+        data: {
+          periodo: { fecha_inicio: fechaInicio, fecha_fin: fechaFin },
+          detalle,
+          por_tipo: porTipo,
+          cantidad_vehiculos: detalle.length,
         }
       };
     } catch (error) {
-      console.error('Error en getRepuestosUtilizados:', error.message);
-      return { success: false, message: error.message };
+      console.error('Error en reporteVehiculosAtendidos:', error.message);
+      return { success: false, message: 'Error al generar el reporte de vehículos atendidos' };
     }
   }
 
-  async getIngresos(fechaInicio, fechaFin) {
+  // HU-41: Reporte de inventario utilizado
+  async reporteInventarioUtilizado(fechaInicio, fechaFin) {
     try {
-      if (!fechaInicio || !fechaFin) {
-        fechaInicio = new Date(new Date().getFullYear(), 0, 1);
-        fechaFin = new Date();
-      }
-      const data = await this.repository.getIngresos(fechaInicio, fechaFin);
+      const errorFechas = validarRangoFechas(fechaInicio, fechaFin);
+      if (errorFechas) return { success: false, message: errorFechas };
+
+      const [detalle, resumen] = await Promise.all([
+        this.repository.inventarioUtilizadoDetalle(fechaInicio, fechaFin),
+        this.repository.inventarioUtilizadoResumen(fechaInicio, fechaFin),
+      ]);
+
+      return { success: true, data: { detalle, resumen } };
+    } catch (error) {
+      console.error('Error en reporteInventarioUtilizado:', error.message);
+      return { success: false, message: 'Error al generar el reporte de inventario utilizado' };
+    }
+  }
+
+  // HU-42: Reporte de ingresos
+  async reporteIngresos(fechaInicio, fechaFin) {
+    try {
+      const errorFechas = validarRangoFechas(fechaInicio, fechaFin);
+      if (errorFechas) return { success: false, message: errorFechas };
+
+      const [porDia, totales, porMetodoPago] = await Promise.all([
+        this.repository.ingresosPorDia(fechaInicio, fechaFin),
+        this.repository.ingresosTotales(fechaInicio, fechaFin),
+        this.repository.ingresosPorMetodoPago(fechaInicio, fechaFin),
+      ]);
+
       return {
         success: true,
-        data,
-        meta: {
-          total_facturas: data.reduce((sum, item) => sum + parseInt(item.total_facturas), 0),
-          total_ingresos: data.reduce((sum, item) => sum + parseFloat(item.total_ingresos), 0),
-          total_isv: data.reduce((sum, item) => sum + parseFloat(item.isv_total), 0)
+        data: {
+          por_dia: porDia,
+          totales,
+          por_metodo_pago: porMetodoPago,
         }
       };
     } catch (error) {
-      console.error('Error en getIngresos:', error.message);
-      return { success: false, message: error.message };
+      console.error('Error en reporteIngresos:', error.message);
+      return { success: false, message: 'Error al generar el reporte de ingresos' };
     }
   }
 
-  async getPorMecanico(fechaInicio, fechaFin) {
+  // HU-43: Reporte por mecánico
+  async reporteMecanicos(fechaInicio, fechaFin, mecanicoId) {
     try {
-      if (!fechaInicio || !fechaFin) {
-        fechaInicio = new Date(new Date().getFullYear(), 0, 1);
-        fechaFin = new Date();
+      const errorFechas = validarRangoFechas(fechaInicio, fechaFin);
+      if (errorFechas) return { success: false, message: errorFechas };
+
+      const resultado = await this.repository.reporteMecanicos(
+        fechaInicio, fechaFin, mecanicoId ? parseInt(mecanicoId) : null
+      );
+
+      return { success: true, data: resultado };
+    } catch (error) {
+      console.error('Error en reporteMecanicos:', error.message);
+      return { success: false, message: 'Error al generar el reporte por mecánico' };
+    }
+  }
+
+  async listarMecanicosActivos() {
+    try {
+      const mecanicos = await this.repository.mecanicosActivos();
+      return { success: true, data: mecanicos };
+    } catch (error) {
+      console.error('Error en listarMecanicosActivos:', error.message);
+      return { success: false, message: 'Error al obtener mecánicos' };
+    }
+  }
+
+  // HU-44: Reporte de órdenes pendientes
+  async reporteOrdenesPendientes(filtros = {}) {
+    try {
+      const { estado, mecanico_id, antiguedad_minima } = filtros;
+      const antiguedad = parseInt(antiguedad_minima) || 0;
+      if (antiguedad < 0) {
+        return { success: false, message: 'La antigüedad mínima no puede ser negativa' };
       }
-      const data = await this.repository.getPorMecanico(fechaInicio, fechaFin);
+
+      const resultado = await this.repository.ordenesPendientes(
+        estado || null,
+        mecanico_id ? parseInt(mecanico_id) : null,
+        antiguedad
+      );
+
+      return { success: true, data: resultado };
+    } catch (error) {
+      console.error('Error en reporteOrdenesPendientes:', error.message);
+      return { success: false, message: 'Error al generar el reporte de órdenes pendientes' };
+    }
+  }
+
+  // HU-45: Dashboard general (admin + recepcionista)
+  async dashboardGeneral() {
+    try {
+      const [
+        ordenesProgreso, ordenesActivas, vehiculosListos,
+        diagnosticosPendientes, alertasInventario,
+        totalClientes, ingresosMes
+      ] = await Promise.all([
+        this.repository.dashboardOrdenesProgreso(),
+        this.repository.dashboardOrdenesActivas(),
+        this.repository.dashboardVehiculosListos(),
+        this.repository.dashboardDiagnosticosPendientes(),
+        this.repository.dashboardAlertasInventario(),
+        this.repository.dashboardTotalClientes(),
+        this.repository.dashboardIngresosMes(),
+      ]);
+
       return {
         success: true,
-        data,
-        meta: {
-          total_mecanicos: data.length,
-          total_ordenes: data.reduce((sum, item) => sum + parseInt(item.total_ordenes), 0),
-          total_ingresos: data.reduce((sum, item) => sum + parseFloat(item.ingresos_generados), 0)
-        }
+        ordenesProgreso: parseInt(ordenesProgreso?.total || 0),
+        ordenesActivas: parseInt(ordenesActivas?.total || 0),
+        vehiculosListos: parseInt(vehiculosListos?.total || 0),
+        diagnosticosPendientes: parseInt(diagnosticosPendientes?.total || 0),
+        alertasInventario: parseInt(alertasInventario?.total || 0),
+        totalClientes: parseInt(totalClientes?.total || 0),
+        ingresosMes: parseFloat(ingresosMes?.total || 0),
       };
     } catch (error) {
-      console.error('Error en getPorMecanico:', error.message);
-      return { success: false, message: error.message };
-    }
-  }
-
-  async getOrdenesPendientes(estado = '') {
-    try {
-      let data;
-      if (estado) {
-        data = await this.repository.getOrdenesPendientesFiltradas(estado);
-      } else {
-        data = await this.repository.getOrdenesPendientes();
-      }
-      return {
-        success: true,
-        data,
-        meta: {
-          total: data.length,
-          por_estado: {
-            recibido: data.filter(item => item.estado === 'recibido').length,
-            en_reparacion: data.filter(item => item.estado === 'en reparacion').length,
-            listo: data.filter(item => item.estado === 'listo').length
-          },
-          antiguedad_promedio: data.length > 0 
-            ? data.reduce((sum, item) => sum + parseInt(item.dias_antiguedad), 0) / data.length 
-            : 0
-        }
-      };
-    } catch (error) {
-      console.error('Error en getOrdenesPendientes:', error.message);
-      return { success: false, message: error.message };
-    }
-  }
-
-  async getDashboard() {
-    try {
-      const data = await this.repository.getDashboard();
-      return { success: true, data };
-    } catch (error) {
-      console.error('Error en getDashboard:', error.message);
-      return { success: false, message: error.message };
+      console.error('Error en dashboardGeneral:', error.message);
+      return { success: false, message: 'Error al obtener los indicadores del dashboard' };
     }
   }
 }
 
-module.exports = new ReporteService();
+module.exports = new ReportesService();

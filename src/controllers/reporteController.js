@@ -1,87 +1,108 @@
-const ReporteService = require('../services/reporte.service');
+const ReportesService = require('../services/reporte.service');
 
-const getServiciosRealizados = async (req, res) => {
+const reporteServicios = async (req, res) => {
   try {
     const { fecha_inicio, fecha_fin } = req.query;
-    const result = await ReporteService.getServiciosRealizados(fecha_inicio, fecha_fin);
+    const result = await ReportesService.reporteServicios(fecha_inicio, fecha_fin);
+    if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error) {
-    console.error('Error en getServiciosRealizados:', error);
-    res.status(500).json({ success: false, message: 'Error al generar reporte de servicios' });
+    console.error('Error en reporteServicios:', error);
+    res.status(500).json({ success: false, message: 'Error al generar el reporte de servicios' });
   }
 };
 
-const getVehiculosAtendidos = async (req, res) => {
+const reporteVehiculosAtendidos = async (req, res) => {
   try {
     const { fecha_inicio, fecha_fin } = req.query;
-    const result = await ReporteService.getVehiculosAtendidos(fecha_inicio, fecha_fin);
+    const result = await ReportesService.reporteVehiculosAtendidos(fecha_inicio, fecha_fin);
+    if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error) {
-    console.error('Error en getVehiculosAtendidos:', error);
-    res.status(500).json({ success: false, message: 'Error al generar reporte de vehículos' });
+    console.error('Error en reporteVehiculosAtendidos:', error);
+    res.status(500).json({ success: false, message: 'Error al generar el reporte de vehículos atendidos' });
   }
 };
 
-const getRepuestosUtilizados = async (req, res) => {
+const reporteInventarioUtilizado = async (req, res) => {
   try {
     const { fecha_inicio, fecha_fin } = req.query;
-    const result = await ReporteService.getRepuestosUtilizados(fecha_inicio, fecha_fin);
+    const result = await ReportesService.reporteInventarioUtilizado(fecha_inicio, fecha_fin);
+    if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error) {
-    console.error('Error en getRepuestosUtilizados:', error);
-    res.status(500).json({ success: false, message: 'Error al generar reporte de repuestos' });
+    console.error('Error en reporteInventarioUtilizado:', error);
+    res.status(500).json({ success: false, message: 'Error al generar el reporte de inventario utilizado' });
   }
 };
 
-const getIngresos = async (req, res) => {
+const reporteIngresos = async (req, res) => {
   try {
     const { fecha_inicio, fecha_fin } = req.query;
-    const result = await ReporteService.getIngresos(fecha_inicio, fecha_fin);
+    const result = await ReportesService.reporteIngresos(fecha_inicio, fecha_fin);
+    if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error) {
-    console.error('Error en getIngresos:', error);
-    res.status(500).json({ success: false, message: 'Error al generar reporte de ingresos' });
+    console.error('Error en reporteIngresos:', error);
+    res.status(500).json({ success: false, message: 'Error al generar el reporte de ingresos' });
   }
 };
 
-const getPorMecanico = async (req, res) => {
+const reporteMecanicos = async (req, res) => {
   try {
-    const { fecha_inicio, fecha_fin } = req.query;
-    const result = await ReporteService.getPorMecanico(fecha_inicio, fecha_fin);
+    const { fecha_inicio, fecha_fin, mecanico_id } = req.query;
+    const result = await ReportesService.reporteMecanicos(fecha_inicio, fecha_fin, mecanico_id);
+    if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error) {
-    console.error('Error en getPorMecanico:', error);
-    res.status(500).json({ success: false, message: 'Error al generar reporte por mecánico' });
+    console.error('Error en reporteMecanicos:', error);
+    res.status(500).json({ success: false, message: 'Error al generar el reporte por mecánico' });
   }
 };
 
-const getOrdenesPendientes = async (req, res) => {
+const listarMecanicosActivos = async (req, res) => {
   try {
-    const { estado } = req.query;
-    const result = await ReporteService.getOrdenesPendientes(estado || '');
+    const result = await ReportesService.listarMecanicosActivos();
     res.json(result);
   } catch (error) {
-    console.error('Error en getOrdenesPendientes:', error);
-    res.status(500).json({ success: false, message: 'Error al obtener órdenes pendientes' });
+    console.error('Error en listarMecanicosActivos:', error);
+    res.status(500).json({ success: false, message: 'Error al obtener mecánicos' });
   }
 };
 
-const getDashboard = async (req, res) => {
+const reporteOrdenesPendientes = async (req, res) => {
   try {
-    const result = await ReporteService.getDashboard();
+    const { estado, mecanico_id, antiguedad_minima } = req.query;
+    const result = await ReportesService.reporteOrdenesPendientes({ estado, mecanico_id, antiguedad_minima });
+    if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error) {
-    console.error('Error en getDashboard:', error);
-    res.status(500).json({ success: false, message: 'Error al obtener dashboard' });
+    console.error('Error en reporteOrdenesPendientes:', error);
+    res.status(500).json({ success: false, message: 'Error al generar el reporte de órdenes pendientes' });
+  }
+};
+
+// HU-45: usado tanto por /api/reportes/dashboard como por /api/dashboard/stats
+// (alias que ya consumía el frontend existente antes de este módulo).
+const dashboardGeneral = async (req, res) => {
+  try {
+    const result = await ReportesService.dashboardGeneral();
+    if (!result.success) return res.status(500).json(result);
+    const { success, ...stats } = result;
+    res.json(stats);
+  } catch (error) {
+    console.error('Error en dashboardGeneral:', error);
+    res.status(500).json({ message: 'Error al obtener los indicadores del dashboard' });
   }
 };
 
 module.exports = {
-  getServiciosRealizados,
-  getVehiculosAtendidos,
-  getRepuestosUtilizados,
-  getIngresos,
-  getPorMecanico,
-  getOrdenesPendientes,
-  getDashboard
+  reporteServicios,
+  reporteVehiculosAtendidos,
+  reporteInventarioUtilizado,
+  reporteIngresos,
+  reporteMecanicos,
+  listarMecanicosActivos,
+  reporteOrdenesPendientes,
+  dashboardGeneral,
 };

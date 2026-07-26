@@ -2,24 +2,29 @@ const express = require('express');
 const router = express.Router();
 const { verificarToken, verificarRol } = require('../middlewares/auth');
 const {
-  getServiciosRealizados,
-  getVehiculosAtendidos,
-  getRepuestosUtilizados,
-  getIngresos,
-  getPorMecanico,
-  getOrdenesPendientes,
-  getDashboard
+  reporteServicios,
+  reporteVehiculosAtendidos,
+  reporteInventarioUtilizado,
+  reporteIngresos,
+  reporteMecanicos,
+  listarMecanicosActivos,
+  reporteOrdenesPendientes,
+  dashboardGeneral,
 } = require('../controllers/reporteController');
 
 router.use(verificarToken);
-router.use(verificarRol('administrador'));
 
-router.get('/servicios', getServiciosRealizados);
-router.get('/vehiculos', getVehiculosAtendidos);
-router.get('/repuestos', getRepuestosUtilizados);
-router.get('/ingresos', getIngresos);
-router.get('/mecanicos', getPorMecanico);
-router.get('/ordenes-pendientes', getOrdenesPendientes);
-router.get('/dashboard', getDashboard);
+// Todas las HU-39 a HU-44 son "Como Administrador" en las historias de usuario.
+router.get('/servicios', verificarRol('administrador'), reporteServicios);
+router.get('/vehiculos-atendidos', verificarRol('administrador'), reporteVehiculosAtendidos);
+router.get('/inventario-utilizado', verificarRol('administrador'), reporteInventarioUtilizado);
+router.get('/ingresos', verificarRol('administrador'), reporteIngresos);
+router.get('/mecanicos', verificarRol('administrador'), reporteMecanicos);
+router.get('/mecanicos/activos', verificarRol('administrador'), listarMecanicosActivos);
+router.get('/ordenes-pendientes', verificarRol('administrador'), reporteOrdenesPendientes);
+
+// HU-45: el dashboard general también se sirve aquí, sin restricción de rol
+// más allá de estar autenticado (lo consumen administrador y recepcionista).
+router.get('/dashboard', dashboardGeneral);
 
 module.exports = router;
