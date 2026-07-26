@@ -228,9 +228,9 @@ module.exports = {
   SOLICITUD_CREATE: `
     INSERT INTO solicitudes_repuestos (
       orden_id, repuesto_id, cantidad_solicitada,
-      costo_historico, precio_historico, mecanico_id, estado
+      costo_historico, precio_historico, mecanico_id
     )
-    VALUES ($1, $2, $3, $4, $5, $6, 'pendiente')
+    VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING *
   `,
 
