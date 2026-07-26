@@ -78,12 +78,15 @@ module.exports = {
     RETURNING *
   `,
 
-  ASIGNAR_MECANICO: `
-    UPDATE ordenes_trabajo 
-    SET mecanico_id = $1, fecha_actualizacion = NOW() 
-    WHERE numero_orden = $2 
-    RETURNING *
-  `,
+ ASIGNAR_MECANICO: `
+  UPDATE ordenes_trabajo 
+  SET mecanico_id = $1, 
+      estado = 'en reparacion',
+      fecha_actualizacion = NOW() 
+  WHERE TRIM(LOWER(numero_orden)) = TRIM(LOWER($2))
+     OR TRIM(LOWER(numero_orden)) = TRIM(LOWER(CONCAT('ORD-', $2)))
+  RETURNING *
+;`,
 
   ACTUALIZAR_ESTADO: `
     UPDATE ordenes_trabajo 
